@@ -1,0 +1,23 @@
+---
+# ServiceMonitor for Akeyless Gateway metrics
+# Prometheus will scrape metrics from the gateway
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: akeyless-gateway-metrics
+  namespace: infra-security
+  labels:
+    app: akeyless-gateway
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: akeyless-gateway
+  namespaceSelector:
+    matchNames:
+      - infra-security
+  endpoints:
+    - port: gateway
+      interval: 30s
+      path: /metrics
+      scheme: http

@@ -1,0 +1,128 @@
+# Akeyless Gateway Helm Values
+# Hostname: akeyless.fklab.local
+# Namespace: infra-security
+
+globalConfig:
+  gatewayAuth:
+    # Universal Identity authentication
+    gatewayAccessId: "p-qzj686col15oum"
+    gatewayAccessType: "universal_identity"
+    # K8s secret containing the UID token (key: gateway-uid-token)
+    gatewayCredentialsExistingSecret: "akeyless-gateway-credentials"
+
+  # Gateway admin access permissions (SAML)
+  allowedAccessPermissions:
+    - name: "Administrators"
+      access_id: "p-4hr352lth7m5sm"
+      sub_claims:
+        email:
+          - "fahmy.k@akeyless.io"
+      permissions:
+        - "admin"
+
+  # Service account for K8s secrets management
+  serviceAccount:
+    create: true
+    serviceAccountName: akeyless-gateway-sa
+    annotations: {}
+
+  # Cluster identification
+  clusterName: "titan-gateway"
+  initialClusterDisplayName: "Titan K8s Gateway"
+
+  # TLS Configuration
+  TLSConf:
+    enabled: true
+    tlsExistingSecret: "akeyless-gateway-tls"
+
+  # Metrics for Prometheus/OpenObserve
+  metrics:
+    enabled: true
+    metricsExistingSecret: "akeyless-metrics-config"
+
+  # Cache configuration
+  clusterCache:
+    enabled: true
+    enableTls: false
+    resources:
+      limits:
+        memory: 1Gi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+    persistence:
+      enabled: true
+      accessMode: "ReadWriteOnce"
+      size: 5Gi
+
+# Gateway deployment configuration
+gateway:
+  deployment:
+    replicaCount: 1  # Single replica for home lab
+    labels:
+      app: akeyless-gateway
+      environment: production
+
+    pod:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8200"
+        prometheus.io/path: "/metrics"
+
+    livenessProbe:
+      initialDelaySeconds: 120
+      periodSeconds: 30
+      failureThreshold: 10
+
+    readinessProbe:
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      timeoutSeconds: 5
+
+  # Service configuration
+  service:
+    type: ClusterIP  # Using Ingress instead of LoadBalancer
+    port: 8000
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8200"
+    labels:
+      app: akeyless-gateway
+
+  # Ingress configuration for akeyless.fklab.local
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-buffer-size: "8k"
+      nginx.ingress.kubernetes.io/proxy-buffers-number: "4"
+      cert-manager.io/cluster-issuer: "mkcert-ca-issuer"
+    rules:
+      - servicePort: gateway
+        hostname: "akeyless.fklab.local"
+    path: /
+    pathType: Prefix
+    tls: true
+    existingSecret: "akeyless-gateway-tls"
+    certManager: true
+
+  # Resource limits for home lab
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+  # Disable HPA for single-node setup
+  hpa:
+    enabled: false
+
+# Secure Remote Access - disabled for now
+sra:
+  enabled: false

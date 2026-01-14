@@ -1,0 +1,87 @@
+stages:
+  - validate
+  - deploy-prereqs
+  - deploy
+
+variables:
+  KUBECONFIG: /tmp/kubeconfig
+  NAMESPACE: infra-security
+
+# Validate Kubernetes manifests
+validate:manifests:
+  stage: validate
+  image: bitnami/kubectl:latest
+  script:
+    - kubectl apply --dry-run=client -f kubernetes/infra-security/namespace.yaml
+    - kubectl apply --dry-run=client -f kubernetes/infra-security/certificate.yaml
+    - kubectl apply --dry-run=client -f kubernetes/infra-security/servicemonitor.yaml
+  rules:
+    - changes:
+        - kubernetes/**/*.yaml
+
+# Validate Helm values
+validate:helm:
+  stage: validate
+  image: alpine/helm:latest
+  script:
+    - helm repo add akeyless https://akeylesslabs.github.io/helm-charts
+    - helm repo update
+    - helm template akeyless-gateway akeyless/akeyless-gateway
+        -f kubernetes/infra-security/akeyless-gateway-values.yaml
+        --namespace $NAMESPACE
+        --debug
+  rules:
+    - changes:
+        - kubernetes/infra-security/akeyless-gateway-values.yaml
+
+# Deploy prerequisites (namespace, certificates, secrets)
+deploy:prereqs:
+  stage: deploy-prereqs
+  image: bitnami/kubectl:latest
+  script:
+    - echo "$KUBECONFIG_DATA" | base64 -d > $KUBECONFIG
+    - kubectl apply -f kubernetes/infra-security/namespace.yaml
+    - kubectl apply -f kubernetes/infra-security/certificate.yaml
+    - kubectl apply -f kubernetes/infra-security/metrics-config.yaml
+    - kubectl apply -f kubernetes/infra-security/servicemonitor.yaml
+    # Only apply secrets if they don't exist (don't overwrite)
+    - kubectl get secret akeyless-gateway-credentials -n $NAMESPACE || kubectl apply -f kubernetes/infra-security/secrets.yaml
+  environment:
+    name: production
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - kubernetes/infra-security/*.yaml
+  when: manual
+
+# Deploy ArgoCD Application
+deploy:argocd-app:
+  stage: deploy
+  image: bitnami/kubectl:latest
+  needs:
+    - deploy:prereqs
+  script:
+    - echo "$KUBECONFIG_DATA" | base64 -d > $KUBECONFIG
+    - kubectl apply -f kubernetes/argocd/akeyless-gateway-app.yaml
+    - |
+      echo "Waiting for ArgoCD to sync..."
+      for i in $(seq 1 30); do
+        STATUS=$(kubectl get application akeyless-gateway -n cicd -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
+        HEALTH=$(kubectl get application akeyless-gateway -n cicd -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
+        echo "Sync: $STATUS, Health: $HEALTH"
+        if [ "$STATUS" = "Synced" ] && [ "$HEALTH" = "Healthy" ]; then
+          echo "Application is synced and healthy!"
+          exit 0
+        fi
+        sleep 10
+      done
+      echo "Warning: Application may not be fully synced yet"
+  environment:
+    name: production
+    url: https://akeyless.fklab.local
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - kubernetes/argocd/*.yaml
+        - kubernetes/infra-security/akeyless-gateway-values.yaml
+  when: manual

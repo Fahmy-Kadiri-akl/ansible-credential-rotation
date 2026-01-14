@@ -1,0 +1,15 @@
+---
+# Certificate for akeyless.fklab.local
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: akeyless-gateway-cert
+  namespace: infra-security
+spec:
+  secretName: akeyless-gateway-tls
+  issuerRef:
+    name: mkcert-ca-issuer
+    kind: ClusterIssuer
+  commonName: akeyless.fklab.local
+  dnsNames:
+    - akeyless.fklab.local

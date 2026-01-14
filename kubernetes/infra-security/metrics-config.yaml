@@ -1,0 +1,41 @@
+---
+# OpenTelemetry metrics configuration for Akeyless Gateway
+# This configures the gateway to export metrics to Prometheus/OpenObserve
+apiVersion: v1
+kind: Secret
+metadata:
+  name: akeyless-metrics-config
+  namespace: infra-security
+  labels:
+    app: akeyless-gateway
+type: Opaque
+stringData:
+  otel-config.yaml: |
+    receivers:
+      prometheus:
+        config:
+          scrape_configs:
+            - job_name: 'akeyless-gateway'
+              scrape_interval: 30s
+              static_configs:
+                - targets: ['localhost:8200']
+
+    processors:
+      batch:
+        timeout: 10s
+        send_batch_size: 1000
+
+    exporters:
+      prometheusremotewrite:
+        endpoint: "https://o2.fklab.local/api/default/prometheus/api/v1/write"
+        tls:
+          insecure_skip_verify: true
+        headers:
+          Authorization: "Basic ${OPENOBSERVE_AUTH}"
+
+    service:
+      pipelines:
+        metrics:
+          receivers: [prometheus]
+          processors: [batch]
+          exporters: [prometheusremotewrite]

@@ -1,0 +1,155 @@
+---
+# ArgoCD Application for Akeyless Gateway
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: akeyless-gateway
+  namespace: cicd
+  labels:
+    app: akeyless
+    component: gateway
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    # Helm chart from Akeyless repository
+    repoURL: https://akeylesslabs.github.io/helm-charts
+    chart: akeyless-gateway
+    targetRevision: "*"  # Latest version
+    helm:
+      valueFiles: []
+      # Values will be provided via the values field below
+      values: |
+        globalConfig:
+          gatewayAuth:
+            gatewayAccessId: "p-qzj686col15oum"
+            gatewayAccessType: "universal_identity"
+            gatewayCredentialsExistingSecret: "akeyless-gateway-credentials"
+
+          allowedAccessPermissions:
+            - name: "Administrators"
+              access_id: "p-4hr352lth7m5sm"
+              sub_claims:
+                email:
+                  - "fahmy.k@akeyless.io"
+              permissions:
+                - "admin"
+
+          serviceAccount:
+            create: true
+            serviceAccountName: akeyless-gateway-sa
+
+          clusterName: "titan-gateway"
+          initialClusterDisplayName: "Titan K8s Gateway"
+
+          TLSConf:
+            enabled: true
+            tlsExistingSecret: "akeyless-gateway-tls"
+
+          metrics:
+            enabled: true
+            metricsExistingSecret: "akeyless-metrics-config"
+
+          clusterCache:
+            enabled: true
+            enableTls: false
+            resources:
+              limits:
+                memory: 1Gi
+              requests:
+                cpu: 100m
+                memory: 256Mi
+            persistence:
+              enabled: true
+              accessMode: "ReadWriteOnce"
+              size: 5Gi
+
+        gateway:
+          deployment:
+            replicaCount: 1
+            labels:
+              app: akeyless-gateway
+              environment: production
+            pod:
+              annotations:
+                prometheus.io/scrape: "true"
+                prometheus.io/port: "8200"
+                prometheus.io/path: "/metrics"
+            livenessProbe:
+              initialDelaySeconds: 120
+              periodSeconds: 30
+              failureThreshold: 10
+            readinessProbe:
+              initialDelaySeconds: 60
+              periodSeconds: 10
+              timeoutSeconds: 5
+
+          service:
+            type: ClusterIP
+            port: 8000
+            annotations:
+              prometheus.io/scrape: "true"
+              prometheus.io/port: "8200"
+            labels:
+              app: akeyless-gateway
+
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            annotations:
+              nginx.ingress.kubernetes.io/ssl-redirect: "true"
+              nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
+              nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+              nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+              nginx.ingress.kubernetes.io/proxy-buffer-size: "8k"
+              nginx.ingress.kubernetes.io/proxy-buffers-number: "4"
+              cert-manager.io/cluster-issuer: "mkcert-ca-issuer"
+            rules:
+              - servicePort: gateway
+                hostname: "akeyless.fklab.local"
+            path: /
+            pathType: Prefix
+            tls: true
+            existingSecret: "akeyless-gateway-tls"
+            certManager: true
+
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+
+          hpa:
+            enabled: false
+
+        sra:
+          enabled: false
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: infra-security
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
