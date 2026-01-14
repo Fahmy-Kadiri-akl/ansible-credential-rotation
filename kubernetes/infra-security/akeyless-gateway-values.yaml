@@ -6,7 +6,7 @@ globalConfig:
   gatewayAuth:
     # Universal Identity authentication
     gatewayAccessId: "p-qzj686col15oum"
-    gatewayAccessType: "universal_identity"
+    gatewayAccessType: "uid"
     # K8s secret containing the UID token (key: gateway-uid-token)
     gatewayCredentialsExistingSecret: "akeyless-gateway-credentials"
 

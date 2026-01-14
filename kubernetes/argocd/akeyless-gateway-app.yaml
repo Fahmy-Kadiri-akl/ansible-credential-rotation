@@ -25,7 +25,7 @@ spec:
         globalConfig:
           gatewayAuth:
             gatewayAccessId: "p-qzj686col15oum"
-            gatewayAccessType: "universal_identity"
+            gatewayAccessType: "uid"
             gatewayCredentialsExistingSecret: "akeyless-gateway-credentials"
 
           allowedAccessPermissions:
@@ -46,7 +46,7 @@ spec:
 
           TLSConf:
             enabled: true
-            tlsExistingSecret: "akeyless-gateway-tls"
+            tlsExistingSecret: "akeyless-gateway-tls-fixed"
 
           metrics:
             enabled: true
@@ -99,6 +99,7 @@ spec:
             enabled: true
             ingressClassName: nginx
             annotations:
+              nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
               nginx.ingress.kubernetes.io/ssl-redirect: "true"
               nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
               nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
@@ -112,7 +113,7 @@ spec:
             path: /
             pathType: Prefix
             tls: true
-            existingSecret: "akeyless-gateway-tls"
+            existingSecret: "akeyless-gateway-tls-fixed"
             certManager: true
 
           resources:
