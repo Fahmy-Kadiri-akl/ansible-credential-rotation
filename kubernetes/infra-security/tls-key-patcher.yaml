@@ -1,0 +1,73 @@
+---
+# CronJob to patch the Akeyless TLS secret with additional key names
+# Required because:
+# - cert-manager generates secrets with tls.crt/tls.key
+# - Akeyless Helm chart expects tlsCertificate/tlsPrivateKey
+# Runs hourly to ensure keys are present after cert renewal
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: akeyless-tls-key-patcher
+  namespace: infra-security
+  labels:
+    app: akeyless-gateway
+spec:
+  schedule: "0 * * * *"  # Run hourly
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: akeyless-gateway-sa
+          containers:
+          - name: patcher
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              # Get existing keys from the secret
+              TLS_CRT=$(kubectl get secret akeyless-gateway-tls-fixed -o jsonpath='{.data.tls\.crt}')
+              TLS_KEY=$(kubectl get secret akeyless-gateway-tls-fixed -o jsonpath='{.data.tls\.key}')
+
+              # Check if tlsCertificate key already exists
+              EXISTING=$(kubectl get secret akeyless-gateway-tls-fixed -o jsonpath='{.data.tlsCertificate}' 2>/dev/null || echo "")
+
+              if [ -z "$EXISTING" ] || [ "$EXISTING" != "$TLS_CRT" ]; then
+                echo "Patching secret with additional key names..."
+                kubectl patch secret akeyless-gateway-tls-fixed --type='json' -p="[
+                  {\"op\": \"add\", \"path\": \"/data/tlsCertificate\", \"value\": \"${TLS_CRT}\"},
+                  {\"op\": \"add\", \"path\": \"/data/tlsPrivateKey\", \"value\": \"${TLS_KEY}\"}
+                ]"
+                echo "Secret patched successfully"
+              else
+                echo "Secret already has correct keys, skipping patch"
+              fi
+          restartPolicy: OnFailure
+---
+# RBAC for the CronJob to patch secrets
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: secret-patcher
+  namespace: infra-security
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: akeyless-secret-patcher
+  namespace: infra-security
+subjects:
+- kind: ServiceAccount
+  name: akeyless-gateway-sa
+  namespace: infra-security
+roleRef:
+  kind: Role
+  name: secret-patcher
+  apiGroup: rbac.authorization.k8s.io
