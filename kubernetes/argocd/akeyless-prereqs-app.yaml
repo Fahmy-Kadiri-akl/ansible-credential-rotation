@@ -1,0 +1,41 @@
+---
+# ArgoCD Application for Akeyless Gateway Prerequisites
+# Manages secrets and other resources needed before the gateway is deployed
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: akeyless-prereqs
+  namespace: cicd
+  labels:
+    app: akeyless
+    component: prerequisites
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"  # Deploy before the gateway
+spec:
+  project: default
+
+  source:
+    repoURL: https://gitlab.fklab.local/root/akeyless-infra.git
+    targetRevision: main
+    path: kubernetes/infra-security
+    directory:
+      recurse: false
+      include: "{namespace.yaml,tls-secret.yaml,secrets.yaml,certificate.yaml,metrics-config.yaml}"
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: infra-security
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m
