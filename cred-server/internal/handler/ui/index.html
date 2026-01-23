@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Akeyless Cred Server</title>
+    <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <svg viewBox="0 0 40 40" fill="none">
+                    <rect width="40" height="40" rx="8" fill="#3b82f6"/>
+                    <path d="M20 8L28 14V26L20 32L12 26V14L20 8Z" stroke="white" stroke-width="2" fill="none"/>
+                    <circle cx="20" cy="20" r="4" fill="white"/>
+                </svg>
+                <h1>Cred Server</h1>
+            </div>
+            <span class="badge badge-green">Connected to Gateway</span>
+        </header>
+
+        <!-- Discovery Section -->
+        <div class="card card-highlight">
+            <h2>Discover Application</h2>
+            <p style="color: #94a3b8; margin-bottom: 1.5rem;">
+                Record your application's API traffic to automatically discover credential endpoints.
+            </p>
+
+            <div class="step-indicator">
+                <div class="step active" id="step1">
+                    <span class="step-num">1</span>
+                    <span>Enter URL</span>
+                </div>
+                <div class="step" id="step2">
+                    <span class="step-num">2</span>
+                    <span>Record</span>
+                </div>
+                <div class="step" id="step3">
+                    <span class="step-num">3</span>
+                    <span>Create</span>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div>
+                    <div class="form-group">
+                        <label>Application URL</label>
+                        <input type="text" id="appUrl" placeholder="https://o2.fklab.local">
+                    </div>
+                    <button class="btn btn-primary" id="discoverBtn" onclick="toggleRecording()">
+                        <span id="discoverText">🔍 Discover Application</span>
+                        <div class="spinner hidden" id="discoverSpinner"></div>
+                    </button>
+                </div>
+                <div>
+                    <div class="result-box" id="discoveryResult">
+                        <span class="result-info">Enter your application URL and click "Start Recording".</span>
+
+<span class="result-info">How it works:</span>
+1. Start recording session
+2. Access app via proxy link
+3. Login and perform token operations
+4. Stop recording to analyze traffic
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Producers Section -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2 style="margin: 0;">Configured Producers</h2>
+                <span class="badge badge-blue" id="producerCount">0</span>
+            </div>
+            <div class="grid" id="producers">
+                <p style="color: #64748b;">No producers configured yet.</p>
+            </div>
+        </div>
+
+        <!-- Akeyless Integration -->
+        <div class="card">
+            <h2>Akeyless Gateway Integration</h2>
+            <p style="color: #94a3b8; margin-bottom: 1rem;">
+                Register producers with your Akeyless Gateway to enable dynamic secrets.
+            </p>
+            <div class="akeyless-info">
+                <p style="margin-bottom: 0.5rem;"><strong>Sync URLs for Custom Producer:</strong></p>
+                <p style="margin-bottom: 0.25rem;">Create: <code id="sync-url-create"></code></p>
+                <p style="margin-bottom: 0.25rem;">Revoke: <code id="sync-url-revoke"></code></p>
+                <p>Rotate: <code id="sync-url-rotate"></code></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/ui/app.js"></script>
+</body>
+</html>

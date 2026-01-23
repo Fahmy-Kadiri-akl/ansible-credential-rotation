@@ -1,0 +1,125 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cred-server
+  namespace: cred-server
+  labels:
+    app: cred-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cred-server
+  template:
+    metadata:
+      labels:
+        app: cred-server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: cred-server
+      containers:
+      - name: cred-server
+        image: cred-server:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: PORT
+          value: "8080"
+        - name: AKEYLESS_GATEWAY_URL
+          value: "https://akeyless.fklab.local"
+        - name: AKEYLESS_ACCESS_ID
+          valueFrom:
+            secretKeyRef:
+              name: cred-server-config
+              key: access-id
+              optional: true
+        - name: ALLOWED_ACCESS_IDS
+          valueFrom:
+            secretKeyRef:
+              name: cred-server-config
+              key: allowed-access-ids
+              optional: true
+        - name: LOG_FORMAT
+          value: "json"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cred-server
+  namespace: cred-server
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cred-server
+  namespace: cred-server
+  labels:
+    app: cred-server
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+    protocol: TCP
+  selector:
+    app: cred-server
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cred-server
+  namespace: cred-server
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "mkcert-ca-issuer"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - cred-server.fklab.local
+    secretName: cred-server-tls
+  rules:
+  - host: cred-server.fklab.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: cred-server
+            port:
+              name: http
