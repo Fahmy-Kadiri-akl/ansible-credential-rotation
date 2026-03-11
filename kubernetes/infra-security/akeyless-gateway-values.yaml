@@ -124,6 +124,64 @@ gateway:
   hpa:
     enabled: false
 
-# Secure Remote Access - disabled for now
+# Secure Remote Access
 sra:
-  enabled: false
+  enabled: true
+
+  # Web bastion (RDP/browser-based remote access)
+  webConfig:
+    deployment:
+      labels:
+        app: akeyless-sra-web
+    replicaCount: 1
+    livenessProbe:
+      initialDelaySeconds: 30
+      periodSeconds: 30
+      failureThreshold: 10
+    readinessProbe:
+      initialDelaySeconds: 20
+      periodSeconds: 10
+      timeoutSeconds: 5
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+    hpa:
+      enabled: false
+
+  # SSH bastion (session recording, cert-based access)
+  sshConfig:
+    deployment:
+      labels:
+        app: akeyless-sra-ssh
+    replicaCount: 1
+    # RSA public key from SSH cert issuer: /akeyless-lab/SSH/SSH-ISSUER
+    CAPublicKey: |
+      ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDUvQSX+aXeMdV2TKX2m5MHAI4unkV/7H3Kap373zfs/DPF1ukWXctqIIRtUwtqIbm5bLkZrshp6ezVhKOi0cgukwYGVaPAQe33QacGxiW6/2NRJ8ARxr3qGlKT2vWVQQdJkBThyhh4qHJ3LZsL98W72Mi40JFaaZD/NT05rKPWV0C4nhI1n1wqbgS9MFQhWa7ke8btOL+kYjPndpR0P/QD5OptePkITjHw6gdJbaXdsz3jOL1hDCEHDoA3AGRcWX9eep5rPXzMHJ7VY/8LpsywQszezPmzHsz4L05IgcBuF4II6GYtCeaMEqzR18IAes/ViyCusKXWUipMp54qWx2l
+    service:
+      type: LoadBalancer
+      port: 22
+      annotations:
+        metallb.universe.tf/address-pool: "default-addresspool"
+      labels:
+        app: akeyless-sra-ssh
+    livenessProbe:
+      failureThreshold: 5
+      periodSeconds: 30
+      timeoutSeconds: 5
+    readinessProbe:
+      initialDelaySeconds: 20
+      periodSeconds: 10
+      timeoutSeconds: 5
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+    hpa:
+      enabled: false
