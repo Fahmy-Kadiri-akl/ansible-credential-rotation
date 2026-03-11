@@ -19,6 +19,10 @@ globalConfig:
           - "fahmy.k@akeyless.io"
       permissions:
         - "admin"
+    - name: "GatewayApiKey"
+      access_id: "p-50gm9w7qkh26am"
+      permissions:
+        - "admin"
 
   # Service account for K8s secrets management
   serviceAccount:
