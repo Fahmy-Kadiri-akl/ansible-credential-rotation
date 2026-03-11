@@ -24,8 +24,8 @@ spec:
       values: |
         globalConfig:
           gatewayAuth:
-            gatewayAccessId: "p-qzj686col15oum"
-            gatewayAccessType: "uid"
+            gatewayAccessId: "p-50gm9w7qkh26am"
+            gatewayAccessType: "access_key"
             gatewayCredentialsExistingSecret: "akeyless-gateway-credentials"
 
           allowedAccessPermissions:
@@ -45,8 +45,7 @@ spec:
           initialClusterDisplayName: "Titan K8s Gateway"
 
           TLSConf:
-            enabled: true
-            tlsExistingSecret: "akeyless-gateway-tls-fixed"
+            enabled: false
 
           metrics:
             enabled: true
@@ -89,6 +88,7 @@ spec:
           service:
             type: ClusterIP
             port: 8000
+            targetPort: 18888
             annotations:
               prometheus.io/scrape: "true"
               prometheus.io/port: "8200"
@@ -99,7 +99,7 @@ spec:
             enabled: true
             ingressClassName: nginx
             annotations:
-              nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+              nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
               nginx.ingress.kubernetes.io/ssl-redirect: "true"
               nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
               nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"

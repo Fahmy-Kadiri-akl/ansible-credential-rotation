@@ -4,10 +4,10 @@
 
 globalConfig:
   gatewayAuth:
-    # Universal Identity authentication
-    gatewayAccessId: "p-qzj686col15oum"
-    gatewayAccessType: "uid"
-    # K8s secret containing the UID token (key: gateway-uid-token)
+    # API Key authentication
+    gatewayAccessId: "p-50gm9w7qkh26am"
+    gatewayAccessType: "access_key"
+    # K8s secret containing the API key (key: gateway-access-key)
     gatewayCredentialsExistingSecret: "akeyless-gateway-credentials"
 
   # Gateway admin access permissions (SAML)
@@ -30,10 +30,9 @@ globalConfig:
   clusterName: "titan-gateway"
   initialClusterDisplayName: "Titan K8s Gateway"
 
-  # TLS Configuration
+  # TLS Configuration (disabled - TLS terminates at nginx)
   TLSConf:
-    enabled: true
-    tlsExistingSecret: "akeyless-gateway-tls"
+    enabled: false
 
   # Metrics for Prometheus/OpenObserve
   metrics:
@@ -83,6 +82,7 @@ gateway:
   service:
     type: ClusterIP  # Using Ingress instead of LoadBalancer
     port: 8000
+    targetPort: 18888  # Gateway runs on 18888 when TLS is disabled
     annotations:
       prometheus.io/scrape: "true"
       prometheus.io/port: "8200"
@@ -94,6 +94,7 @@ gateway:
     enabled: true
     ingressClassName: nginx
     annotations:
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
       nginx.ingress.kubernetes.io/ssl-redirect: "true"
       nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
       nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
