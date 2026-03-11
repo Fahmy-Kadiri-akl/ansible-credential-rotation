@@ -36,10 +36,6 @@ spec:
                   - "fahmy.k@akeyless.io"
               permissions:
                 - "admin"
-            - name: "GatewayApiKey"
-              access_id: "p-50gm9w7qkh26am"
-              permissions:
-                - "admin"
 
           serviceAccount:
             create: true
