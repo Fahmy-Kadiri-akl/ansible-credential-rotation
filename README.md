@@ -28,6 +28,11 @@ Akeyless manages the full lifecycle of Ansible credentials. Rather than storing 
 ### Architecture
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  theme: base
+---
 graph LR
     subgraph Akeyless["Akeyless Platform"]
         RS["Rotated Secrets<br/>(password + API key)"]
@@ -94,6 +99,11 @@ akeyless describe-item --name /Ansible/Credentials/server-build-svc
 ### Password Rotation Flow
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  theme: base
+---
 sequenceDiagram
     participant AKL as Akeyless
     participant GW as Gateway
@@ -136,6 +146,11 @@ After the rotation succeeds, Akeyless Event Center can fire a webhook to notify 
 ### API Key Rotation Flow
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  theme: base
+---
 sequenceDiagram
     participant AKL as Akeyless
     participant CP as Custom Producer
@@ -169,7 +184,7 @@ API token rotation uses a create-before-revoke pattern. The producer first creat
 
 | Requirement | Details |
 |-------------|---------|
-| **Kubernetes cluster** | Any cluster (MicroK8s, EKS, GKE, etc.). Needs an ingress controller and cert-manager. |
+| **Kubernetes cluster** | Any cluster (EKS, GKE, MicroK8s, etc.), or a single Linux machine where K3s will be installed. See Step 1 for both options. |
 | **Akeyless Gateway** | Deployed in the cluster and accessible. Needs an API key auth method. |
 | **Akeyless CLI** | Installed and authenticated (`akeyless auth`). |
 | **Docker** | For building the custom producer image. |
@@ -275,28 +290,34 @@ It requires `AKEYLESS_ACCESS_ID` and `AKEYLESS_ACCESS_KEY` environment variables
 
 ## Step 1 - Deploy AWX
 
-AWX is the open-source upstream of Ansible Automation Platform. Skip this if you already have an AAP/AWX instance.
+AWX is the open-source upstream of Ansible Automation Platform. Skip this step if you already have an AAP/AWX instance.
 
-### 1.1 Create the namespace
+AWX requires Kubernetes. If you don't have a cluster, Option B below walks you through a single-machine setup using K3s.
+
+### Option A: Existing Kubernetes Cluster
+
+Use this if you already have a running cluster with an ingress controller and cert-manager.
+
+#### 1.1 Create the namespace
 
 ```bash
 kubectl create namespace ansible
 ```
 
-### 1.2 Create a DNS record
+#### 1.2 Create a DNS record
 
 Add a DNS A record for your AWX hostname (e.g., `ansible.example.com`) pointing to your cluster's ingress IP.
 
-### 1.3 Edit the AWX configuration
+#### 1.3 Edit the AWX configuration
 
 Edit `kubernetes/awx/awx-instance.yaml`:
 
 ```yaml
 spec:
-  hostname: ansible.example.com          # ← your hostname
+  hostname: ansible.example.com          # your hostname
   ingress_tls_secret: awx-tls
   ingress_annotations: |
-    cert-manager.io/cluster-issuer: your-cluster-issuer  # ← your cert issuer
+    cert-manager.io/cluster-issuer: your-cluster-issuer  # your cert issuer
 ```
 
 Edit `kubernetes/awx/certificate.yaml`:
@@ -304,25 +325,25 @@ Edit `kubernetes/awx/certificate.yaml`:
 ```yaml
 spec:
   issuerRef:
-    name: your-cluster-issuer             # ← your cert issuer
+    name: your-cluster-issuer             # your cert issuer
   dnsNames:
-    - ansible.example.com                 # ← your hostname
+    - ansible.example.com                 # your hostname
 ```
 
-### 1.4 Deploy
+#### 1.4 Deploy
 
 ```bash
 kubectl apply -k kubernetes/awx/
 ```
 
-The AWX operator CRD needs a moment to register. If you see `no matches for kind "AWX"`, wait 30 seconds and re-apply `awx-instance.yaml`:
+The AWX operator CRD needs a moment to register. If you see `no matches for kind "AWX"`, wait 30 seconds and re-apply:
 
 ```bash
 kubectl wait --for=condition=Established crd/awxs.awx.ansible.com --timeout=60s
 kubectl apply -f kubernetes/awx/awx-instance.yaml
 ```
 
-### 1.5 Wait for readiness
+#### 1.5 Wait for readiness
 
 ```bash
 kubectl get pods -n ansible -w
@@ -330,16 +351,101 @@ kubectl get pods -n ansible -w
 
 Wait until `awx-web`, `awx-task`, and `awx-postgres` are all Running.
 
-### 1.6 Get the admin password
+#### 1.6 Get the admin password
 
 ```bash
 kubectl get secret awx-admin-password -n ansible -o jsonpath='{.data.password}' | base64 -d; echo
 ```
 
-### 1.7 Verify access
+#### 1.7 Verify access
 
 ```bash
 curl -sk -u "admin:<password>" "https://ansible.example.com/api/v2/ping/"
+```
+
+### Option B: Single Machine with K3s
+
+Use this if you don't have a Kubernetes cluster. K3s is a lightweight, single-binary Kubernetes distribution that runs on any Linux machine. It includes an ingress controller (Traefik) out of the box.
+
+**Requirements:** Linux host with at least 4 GB RAM and 2 CPUs.
+
+#### 1.1 Install K3s
+
+```bash
+curl -sfL https://get.k3s.io | sh -
+
+# Make kubectl available to your user
+mkdir -p ~/.kube
+sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+sudo chown $(id -u):$(id -g) ~/.kube/config
+export KUBECONFIG=~/.kube/config
+```
+
+Verify the cluster is running:
+
+```bash
+kubectl get nodes
+```
+
+#### 1.2 Install cert-manager
+
+```bash
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+kubectl wait --for=condition=Available deployment/cert-manager -n cert-manager --timeout=120s
+```
+
+Create a self-signed issuer for TLS:
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-issuer
+spec:
+  selfSigned: {}
+EOF
+```
+
+#### 1.3 Set your hostname
+
+If you don't have DNS, add an entry to `/etc/hosts` on any machine that needs to reach AWX:
+
+```bash
+echo "<k3s-host-ip> ansible.example.com" | sudo tee -a /etc/hosts
+```
+
+#### 1.4 Edit the AWX configuration
+
+Edit `kubernetes/awx/awx-instance.yaml` and `kubernetes/awx/certificate.yaml`:
+- Set `hostname` to `ansible.example.com` (or whatever you chose)
+- Set the cert-manager issuer to `selfsigned-issuer`
+
+#### 1.5 Deploy AWX
+
+```bash
+kubectl create namespace ansible
+kubectl apply -k kubernetes/awx/
+
+# Wait for the CRD, then apply the instance
+kubectl wait --for=condition=Established crd/awxs.awx.ansible.com --timeout=60s
+kubectl apply -f kubernetes/awx/awx-instance.yaml
+```
+
+#### 1.6 Wait for readiness
+
+```bash
+kubectl get pods -n ansible -w
+```
+
+This takes a few minutes on a fresh machine. Wait until `awx-web`, `awx-task`, and `awx-postgres` are all Running.
+
+#### 1.7 Get the admin password and verify
+
+```bash
+AWX_PASS=$(kubectl get secret awx-admin-password -n ansible -o jsonpath='{.data.password}' | base64 -d)
+echo "Admin password: ${AWX_PASS}"
+curl -sk -u "admin:${AWX_PASS}" "https://ansible.example.com/api/v2/ping/"
 ```
 
 ### 1.8 Create the service account
