@@ -1,0 +1,26 @@
+---
+# Docker Compose deployment for the custom producer.
+# Use this if you don't have a Kubernetes cluster.
+#
+# Usage:
+#   cp .env.example .env   # edit variables
+#   docker compose up -d
+#   docker compose logs -f
+
+services:
+  ansible-cred-producer:
+    build: .
+    image: ansible-cred-producer:latest
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      AKEYLESS_ACCESS_ID: "${AKEYLESS_ACCESS_ID}"
+      # Set SKIP_AUTH=true only for initial testing
+      # SKIP_AUTH: "true"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
