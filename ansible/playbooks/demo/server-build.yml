@@ -1,0 +1,93 @@
+---
+# server-build.yml
+#
+# Simulates a server build process that uses credentials fetched from Akeyless.
+# This demonstrates the customer's use case: CI/CD pipeline authenticates to
+# Ansible AWX using rotated credentials stored in Akeyless, then triggers
+# server configuration tasks.
+#
+# Usage (standalone):
+#   ansible-playbook ansible/playbooks/demo/server-build.yml \
+#     -e server_name=web-server-01 \
+#     -e server_role=webserver
+#
+# Or triggered via AWX job template with extra_vars.
+
+- name: "Server Build - {{ server_name | default('demo-server') }}"
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    server_name: "{{ server_name | default('demo-server-' + ansible_date_time.epoch) }}"
+    server_role: "{{ server_role | default('webserver') }}"
+    build_id: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+
+  tasks:
+    - name: "Step 1 - Validate build parameters"
+      ansible.builtin.assert:
+        that:
+          - server_name is defined
+          - server_role in ['webserver', 'appserver', 'database', 'bastion']
+        fail_msg: "Invalid build parameters. server_role must be one of: webserver, appserver, database, bastion"
+      tags: [validate]
+
+    - name: "Step 2 - Record build start"
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          SERVER BUILD STARTED
+          ========================================
+          Build ID:    {{ build_id }}
+          Server:      {{ server_name }}
+          Role:        {{ server_role }}
+          Timestamp:   {{ ansible_date_time.iso8601 }}
+          Hostname:    {{ ansible_hostname }}
+          OS:          {{ ansible_distribution }} {{ ansible_distribution_version }}
+          ========================================
+      tags: [info]
+
+    - name: "Step 3 - Simulate base OS configuration"
+      ansible.builtin.debug:
+        msg: "Configuring base OS packages for {{ server_role }}..."
+      tags: [configure]
+
+    - name: "Step 4 - Simulate security hardening"
+      ansible.builtin.debug:
+        msg: "Applying security hardening profile for {{ server_role }}..."
+      tags: [security]
+
+    - name: "Step 5 - Simulate role-specific configuration"
+      ansible.builtin.debug:
+        msg: "Installing {{ server_role }} role packages and configuration..."
+      tags: [configure]
+
+    - name: "Step 6 - Write build manifest"
+      ansible.builtin.copy:
+        content: |
+          {
+            "build_id": "{{ build_id }}",
+            "server_name": "{{ server_name }}",
+            "server_role": "{{ server_role }}",
+            "built_at": "{{ ansible_date_time.iso8601 }}",
+            "built_by": "{{ ansible_user_id }}",
+            "os": "{{ ansible_distribution }} {{ ansible_distribution_version }}",
+            "status": "completed"
+          }
+        dest: "/tmp/build-manifest-{{ build_id }}.json"
+        mode: "0644"
+      tags: [manifest]
+
+    - name: "Step 7 - Record build completion"
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          SERVER BUILD COMPLETED
+          ========================================
+          Build ID:    {{ build_id }}
+          Server:      {{ server_name }}
+          Role:        {{ server_role }}
+          Manifest:    /tmp/build-manifest-{{ build_id }}.json
+          Status:      SUCCESS
+          ========================================
+      tags: [info]

@@ -1,0 +1,13 @@
+---
+# Akeyless configuration
+akeyless_api_url: "https://api.akeyless.io"
+akeyless_gateway_url: "https://your-gateway.example.com:8000"
+akeyless_access_id: "{{ lookup('env', 'AKEYLESS_ACCESS_ID') }}"
+akeyless_access_key: "{{ lookup('env', 'AKEYLESS_ACCESS_KEY') }}"
+
+# Akeyless secret paths
+akeyless_ansible_secrets_folder: "/Ansible/Credentials"
+
+# Ansible AAP/AWX controller
+ansible_controller_url: "https://ansible.example.com"
+ansible_controller_admin_user: "admin"

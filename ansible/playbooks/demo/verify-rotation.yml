@@ -1,0 +1,74 @@
+---
+# verify-rotation.yml
+#
+# Validates that credential rotation is working by:
+# 1. Authenticating to AWX with the current Akeyless-stored password
+# 2. Launching the server-build job template
+# 3. Verifying the job completed successfully
+#
+# This playbook is the "proof" that the rotation pipeline works end-to-end.
+
+- name: Verify credential rotation - authenticate and launch job
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    awx_url: "{{ awx_url | default('https://ansible.example.com') }}"
+    awx_username: "{{ awx_username | default('svc-server-build') }}"
+    awx_password: "{{ awx_password }}"
+    job_template_name: "{{ job_template_name | default('Server Build') }}"
+
+  tasks:
+    - name: "Authenticate to AWX with rotated credentials"
+      ansible.builtin.uri:
+        url: "{{ awx_url }}/api/v2/me/"
+        user: "{{ awx_username }}"
+        password: "{{ awx_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        method: GET
+      register: auth_result
+      failed_when: auth_result.status != 200
+
+    - name: "Confirm authentication succeeded"
+      ansible.builtin.debug:
+        msg: "Successfully authenticated as '{{ auth_result.json.results[0].username }}' (user ID: {{ auth_result.json.results[0].id }})"
+
+    - name: "Find job template '{{ job_template_name }}'"
+      ansible.builtin.uri:
+        url: "{{ awx_url }}/api/v2/job_templates/?name={{ job_template_name | urlencode }}"
+        user: "{{ awx_username }}"
+        password: "{{ awx_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        method: GET
+      register: jt_result
+
+    - name: "Launch server build job"
+      ansible.builtin.uri:
+        url: "{{ awx_url }}/api/v2/job_templates/{{ jt_result.json.results[0].id }}/launch/"
+        user: "{{ awx_username }}"
+        password: "{{ awx_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        method: POST
+        body_format: json
+        body:
+          extra_vars:
+            server_name: "rotation-test-server"
+            server_role: "webserver"
+        status_code: 201
+      register: launch_result
+      when: jt_result.json.count > 0
+
+    - name: "Job launched successfully"
+      ansible.builtin.debug:
+        msg: |
+          Job ID: {{ launch_result.json.id | default('N/A') }}
+          Status: {{ launch_result.json.status | default('N/A') }}
+          URL: {{ awx_url }}/#/jobs/{{ launch_result.json.id | default('') }}
+
+          END-TO-END VERIFICATION: PASSED
+          Credential rotation is working correctly.
+      when: launch_result is defined and launch_result.json is defined

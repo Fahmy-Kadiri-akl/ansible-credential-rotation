@@ -1,0 +1,52 @@
+---
+# akeyless-rotation.yml
+#
+# Ansible Event-Driven Automation (EDA) rulebook that listens for webhook
+# events from Akeyless Event Center. When a rotated secret is successfully
+# rotated, this rulebook triggers a job to update the corresponding Ansible
+# credential objects.
+#
+# Deploy this with:
+#   ansible-rulebook --rulebook eda/rulebooks/akeyless-rotation.yml \
+#     -i inventory/hosts \
+#     --vars eda/vars/akeyless.yml
+#
+# The Akeyless Event Center webhook should POST to:
+#   http://<eda-host>:5000/endpoint
+#
+- name: Listen for Akeyless rotation events
+  hosts: all
+  sources:
+    - ansible.eda.webhook:
+        host: 0.0.0.0
+        port: 5000
+        # Token-based auth - the Akeyless webhook must send this as a
+        # bearer token. Configure in the Akeyless Event Forwarder.
+        token: "{{ eda_webhook_token }}"
+
+  rules:
+    - name: Handle successful secret rotation
+      condition: >
+        event.payload.Akeyless_Events is defined and
+        event.payload.Akeyless_Events["rotated-secret-success"] is defined
+      action:
+        run_playbook:
+          name: playbooks/update-credential.yml
+          extra_vars:
+            ansible_eda: "{{ event }}"
+
+    - name: Alert on rotation failure
+      condition: >
+        event.payload.Akeyless_Events is defined and
+        event.payload.Akeyless_Events["rotated-secret-failure"] is defined
+      action:
+        run_playbook:
+          name: playbooks/notify-rotation-failure.yml
+          extra_vars:
+            ansible_eda: "{{ event }}"
+
+    - name: Log all other events
+      condition: event.payload.Akeyless_Events is defined
+      action:
+        debug:
+          msg: "Received Akeyless event: {{ event.payload.Akeyless_Events | to_json }}"

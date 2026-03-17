@@ -1,0 +1,34 @@
+---
+# notify-rotation-failure.yml
+#
+# Triggered by EDA when an Akeyless rotation fails.
+# Sends a notification to the ops team.
+
+- name: Handle Akeyless rotation failure notification
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Extract failure events
+      ansible.builtin.set_fact:
+        failure_events: "{{ ansible_eda.event.payload.Akeyless_Events['rotated-secret-failure'] | default([]) }}"
+
+    - name: Log rotation failure details
+      ansible.builtin.debug:
+        msg: |
+          ROTATION FAILURE ALERT
+          Secret: {{ item.item_name | default('unknown') }}
+          Error: {{ item.error | default('no error details') }}
+          Time: {{ item.event_time | default('unknown') }}
+      loop: "{{ failure_events }}"
+      loop_control:
+        label: "{{ item.item_name | default('unknown') }}"
+
+    # Extend with your notification method (email, Slack, PagerDuty, etc.)
+    # - name: Send Slack notification
+    #   community.general.slack:
+    #     token: "{{ slack_token }}"
+    #     channel: "#ops-alerts"
+    #     msg: "Akeyless rotation failed for {{ item.item_name }}"
+    #   loop: "{{ failure_events }}"
