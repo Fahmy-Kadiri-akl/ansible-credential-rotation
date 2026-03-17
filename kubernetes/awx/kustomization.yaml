@@ -1,0 +1,32 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - github.com/ansible/awx-operator/config/default?ref=2.19.1
+  - awx-instance.yaml
+  - certificate.yaml
+
+namespace: ansible
+
+images:
+  - name: quay.io/ansible/awx-operator
+    newTag: 2.19.1
+
+patches:
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingWebhookConfiguration
+    patch: |
+      - op: replace
+        path: /webhooks/0/clientConfig/service/namespace
+        value: ansible
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: MutatingWebhookConfiguration
+    patch: |
+      - op: replace
+        path: /webhooks/0/clientConfig/service/namespace
+        value: ansible

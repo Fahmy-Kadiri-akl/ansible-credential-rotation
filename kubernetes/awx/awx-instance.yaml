@@ -1,0 +1,56 @@
+---
+apiVersion: awx.ansible.com/v1beta1
+kind: AWX
+metadata:
+  name: awx
+  namespace: ansible
+spec:
+  # Lightweight deployment for POC
+  replicas: 1
+
+  # Admin user
+  admin_user: admin
+
+  # Ingress
+  ingress_type: ingress
+  ingress_class_name: nginx
+  hostname: ansible.example.com
+  ingress_tls_secret: awx-tls
+  ingress_annotations: |
+    cert-manager.io/cluster-issuer: your-cluster-issuer
+
+  # Resource limits for POC
+  web_resource_requirements:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+
+  task_resource_requirements:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+
+  ee_resource_requirements:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  # PostgreSQL
+  postgres_storage_class: microk8s-hostpath
+  postgres_storage_requirements:
+    requests:
+      storage: 5Gi
+
+  # Projects storage
+  projects_persistence: true
+  projects_storage_class: microk8s-hostpath
+  projects_storage_size: 2Gi

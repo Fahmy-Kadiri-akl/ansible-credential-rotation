@@ -1,0 +1,13 @@
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: awx-tls
+  namespace: ansible
+spec:
+  secretName: awx-tls
+  issuerRef:
+    name: your-cluster-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - ansible.example.com
