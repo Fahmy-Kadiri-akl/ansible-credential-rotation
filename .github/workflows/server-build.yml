@@ -1,0 +1,45 @@
+---
+# GitHub Actions workflow that demonstrates the CI/CD integration pattern.
+# This fetches rotated credentials from Akeyless and triggers an AWX job.
+#
+# Secrets required:
+#   AKEYLESS_ACCESS_ID  - Akeyless API key access ID
+#   AKEYLESS_ACCESS_KEY - Akeyless API key secret
+
+name: Server Build Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      server_name:
+        description: "Server name to build"
+        required: true
+        default: "gh-actions-server"
+      server_role:
+        description: "Server role"
+        required: true
+        default: "webserver"
+        type: choice
+        options:
+          - webserver
+          - appserver
+          - database
+          - bastion
+
+jobs:
+  build-server:
+    name: Build Server via AWX
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run server build pipeline
+        env:
+          AKEYLESS_ACCESS_ID: ${{ secrets.AKEYLESS_ACCESS_ID }}
+          AKEYLESS_ACCESS_KEY: ${{ secrets.AKEYLESS_ACCESS_KEY }}
+          AWX_URL: ${{ vars.AWX_URL }}
+          SECRET_PATH: /Ansible/Credentials/server-build-svc
+          SERVER_NAME: ${{ inputs.server_name }}
+          SERVER_ROLE: ${{ inputs.server_role }}
+        run: ./cicd/pipeline-server-build.sh "$SERVER_NAME" "$SERVER_ROLE"
