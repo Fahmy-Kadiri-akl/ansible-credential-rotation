@@ -335,14 +335,14 @@ spec:
 
 #### 1.4 Deploy
 
+Deploy in two steps — the operator must register its CRD before the AWX instance can be created:
+
 ```bash
+# Step 1: Deploy the AWX Operator
 kubectl apply -k kubernetes/awx/
-```
 
-The AWX operator CRD needs a moment to register. If you see `no matches for kind "AWX"`, wait 30 seconds and re-apply:
-
-```bash
-kubectl wait --for=condition=Established crd/awxs.awx.ansible.com --timeout=60s
+# Step 2: Wait for the CRD, then create the AWX instance
+kubectl wait --for=condition=Established crd/awxs.awx.ansible.com --timeout=120s
 kubectl apply -f kubernetes/awx/awx-instance.yaml
 ```
 
@@ -431,10 +431,11 @@ Edit `kubernetes/awx/certificate.yaml`:
 
 ```bash
 kubectl create namespace ansible
+# Step 1: Deploy the AWX Operator
 kubectl apply -k kubernetes/awx/
 
-# Wait for the CRD, then apply the instance
-kubectl wait --for=condition=Established crd/awxs.awx.ansible.com --timeout=60s
+# Step 2: Wait for the CRD, then create the AWX instance
+kubectl wait --for=condition=Established crd/awxs.awx.ansible.com --timeout=120s
 kubectl apply -f kubernetes/awx/awx-instance.yaml
 ```
 

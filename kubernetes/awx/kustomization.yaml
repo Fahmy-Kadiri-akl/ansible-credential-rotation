@@ -4,7 +4,6 @@ kind: Kustomization
 
 resources:
   - github.com/ansible/awx-operator/config/default?ref=2.19.1
-  - awx-instance.yaml
   - certificate.yaml
 
 namespace: ansible
