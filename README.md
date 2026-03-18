@@ -187,9 +187,9 @@ API token rotation uses a create-before-revoke pattern. The producer first creat
 | **Kubernetes cluster** | Any cluster (EKS, GKE, MicroK8s, etc.), or a single Linux machine where K3s will be installed. See Step 1 for both options. |
 | **Akeyless Gateway** | Deployed in the cluster and accessible. Needs an API key auth method. |
 | **Akeyless CLI** | Installed and authenticated (`akeyless auth`). |
-| **Docker** | For building the custom producer image. |
-| **kubectl** | Configured to talk to your cluster. |
-| **Container registry** | Any registry accessible from the cluster (e.g., Docker Hub, local registry). |
+| **kubectl** | v1.14+ (includes built-in kustomize via `kubectl apply -k`). Configured to talk to your cluster. |
+| **Docker** | Only if building the custom producer image yourself. A pre-built public image is available on GHCR. |
+| **jq + curl** | Used by the setup, pipeline, and E2E test scripts. |
 | **DNS** | DNS records for AWX and the custom producer hostnames, resolving to your ingress IP. |
 
 ---
