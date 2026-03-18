@@ -578,15 +578,15 @@ You can deploy the custom producer using **Kubernetes** or **Docker Compose**.
 
 ### Option A: Kubernetes
 
-#### 2.1 Pull or build the image
+#### 2.1 Build the image
 
-A pre-built image is available on GitHub Container Registry:
+If you forked this repo, the **Publish Custom Producer Image** GitHub Actions workflow automatically builds and pushes the image to GHCR on any push to `main` that changes `custom-producer/`. You can also trigger it manually from **Actions > Publish Custom Producer Image > Run workflow**. The published image will be:
 
 ```
-ghcr.io/fahmy-kadiri-akl/ansible-cred-producer:latest
+ghcr.io/<your-github-username>/ansible-cred-producer:latest
 ```
 
-The default Kubernetes manifest already references this image. If you want to build your own:
+Alternatively, build and push manually to any registry your cluster can pull from:
 
 ```bash
 cd custom-producer
@@ -598,7 +598,7 @@ docker push <your-registry>/ansible-cred-producer:latest
 
 Edit `custom-producer/kubernetes/deployment.yaml`:
 
-- If you built your own image, update the `image` field to your registry path
+- Update the `image` field to match your registry (e.g., `ghcr.io/<your-username>/ansible-cred-producer:latest`)
 - Set the `akeyless-access-id` in the Secret to your Akeyless Gateway access ID
 - Set the ingress `host` to your hostname (e.g., `ansible-producer.example.com`)
 - Set the cert-manager issuer annotation to match your cluster
