@@ -1,8 +1,41 @@
+# Credentials and secrets
 .env
-*.env.local
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+!kubernetes/awx/certificate.yaml
+credentials.json
+secrets.json
+**/secret*.yaml
+!custom-producer/kubernetes/deployment.yaml
+kubeconfig
+kubeconfig.yaml
+.kube/
+token
+*.token
+
+# Docker
+.docker/
+
+# Python
 __pycache__/
 *.pyc
+
+# Editor
 .DS_Store
 *.swp
 *.swo
+*~
+.idea/
+.vscode/
+
+# Go
 vendor/
+
+# Build
+*.exe
+*.dll
+*.so
+*.dylib
