@@ -308,6 +308,14 @@ kubectl create namespace ansible
 
 Add a DNS A record for your AWX hostname (e.g., `ansible.example.com`) pointing to your cluster's ingress IP.
 
+> **Important — hostname conflicts:** If you're using an nginx ingress controller and other services already run on this cluster, AWX **must have its own unique hostname**. Nginx routes by hostname — if two ingresses share the same host and path, one will shadow the other. For example, if your Akeyless Gateway is already on `gateway.example.com`, give AWX a different hostname like `ansible.example.com`. Do **not** reuse the gateway's hostname.
+>
+> To check for conflicts:
+>
+> ```bash
+> kubectl get ingress --all-namespaces -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,HOST:.spec.rules[*].host'
+> ```
+
 #### 1.3 Edit the AWX configuration
 
 Edit `kubernetes/awx/awx-instance.yaml`:
@@ -898,3 +906,5 @@ kubectl rollout restart deployment/ansible-cred-producer -n ansible
 | `SKIP_AUTH=true` in production | Auth is disabled | Remove `SKIP_AUTH` env var: `kubectl set env deployment/ansible-cred-producer -n ansible SKIP_AUTH-` |
 | AWX operator pod `ImagePullBackOff` | `kube-rbac-proxy` image reference is stale | Patch the image: `kubectl patch deployment awx-operator-controller-manager -n ansible --type='json' -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/image", "value":"registry.k8s.io/kubebuilder/kube-rbac-proxy:v0.16.0"}]'` |
 | K3s ingress not routing traffic | AWX manifest uses `nginx` but K3s ships `traefik` | Change `ingress_class_name` to `traefik` in `awx-instance.yaml` |
+| AWX ingress shows `127.0.0.1` on GCE/GKE | Using `nginx` class instead of `gce` | Change `ingress_class_name` to `gce` (see cloud-specific table in Step 1.3) |
+| AWX unreachable or returns wrong app | Hostname conflict — another ingress uses the same host | AWX needs its own unique hostname. Check with: `kubectl get ingress --all-namespaces -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name,HOST:.spec.rules[*].host'` |
