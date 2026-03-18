@@ -22,9 +22,7 @@ spec:
     spec:
       containers:
         - name: producer
-          # Update to your registry. Build via GitHub Actions or manually:
-          #   docker build -t ghcr.io/<your-username>/ansible-cred-producer:latest custom-producer/
-          image: ghcr.io/REPLACE_WITH_YOUR_REGISTRY/ansible-cred-producer:latest
+          image: ghcr.io/fahmy-kadiri-akl/ansible-cred-producer:latest
           ports:
             - containerPort: 8080
               name: http
