@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: producer
-          image: localhost:32000/ansible-cred-producer:latest
+          image: ghcr.io/fahmy-kadiri-akl/ansible-cred-producer:latest
           ports:
             - containerPort: 8080
               name: http

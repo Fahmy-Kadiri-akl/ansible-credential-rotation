@@ -45,12 +45,15 @@ spec:
       memory: 1Gi
 
   # PostgreSQL
-  postgres_storage_class: microk8s-hostpath
+  # Omit postgres_storage_class to use your cluster's default StorageClass.
+  # Examples: gp2/gp3 (EKS), standard (GKE), local-path (K3s), microk8s-hostpath (MicroK8s)
+  # Uncomment and set if your cluster has no default or you need a specific class:
+  # postgres_storage_class: local-path
   postgres_storage_requirements:
     requests:
       storage: 5Gi
 
   # Projects storage
   projects_persistence: true
-  projects_storage_class: microk8s-hostpath
+  # projects_storage_class: local-path
   projects_storage_size: 2Gi

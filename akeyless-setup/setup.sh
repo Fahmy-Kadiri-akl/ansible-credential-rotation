@@ -27,7 +27,25 @@ ANSIBLE_ADMIN_USER="${ANSIBLE_ADMIN_USER:-admin}"
 ANSIBLE_ADMIN_PASSWORD="${ANSIBLE_ADMIN_PASSWORD:-REPLACE_ME}"
 TARGET_USERNAME="${TARGET_USERNAME:-svc-server-build}"
 TARGET_INITIAL_PASSWORD="${TARGET_INITIAL_PASSWORD:-REPLACE_ME}"
+# AWX user ID for the target user. Find it with:
+#   curl -sk -u "admin:<pass>" "https://ansible.example.com/api/v2/users/?username=svc-server-build" | jq '.results[0].id'
+TARGET_USER_ID="${TARGET_USER_ID:-0}"
 # ----- End Configuration -----
+
+# Auto-discover user ID from AWX if not explicitly set
+if [ "${TARGET_USER_ID}" = "0" ]; then
+  echo "=== Pre-flight: Looking up AWX user ID for '${TARGET_USERNAME}' ==="
+  DISCOVERED_ID=$(curl -sk -u "${ANSIBLE_ADMIN_USER}:${ANSIBLE_ADMIN_PASSWORD}" \
+    "${ANSIBLE_URL}/api/v2/users/?username=${TARGET_USERNAME}" 2>/dev/null \
+    | jq -r '.results[0].id // empty')
+  if [ -n "$DISCOVERED_ID" ]; then
+    TARGET_USER_ID="$DISCOVERED_ID"
+    echo "  Found user ID: ${TARGET_USER_ID}"
+  else
+    echo "  WARNING: Could not look up user ID. Using 0 (producer will look up by username at runtime)."
+  fi
+  echo ""
+fi
 
 echo "=== Step 1: Create Web Target for custom producer ==="
 akeyless target create web \
@@ -46,7 +64,7 @@ PASSWORD_PAYLOAD=$(cat <<PAYLOAD
   "admin_user": "${ANSIBLE_ADMIN_USER}",
   "admin_password": "${ANSIBLE_ADMIN_PASSWORD}",
   "target_username": "${TARGET_USERNAME}",
-  "target_user_id": 0,
+  "target_user_id": ${TARGET_USER_ID},
   "password": "${TARGET_INITIAL_PASSWORD}",
   "skip_tls_verify": true
 }
@@ -72,7 +90,7 @@ API_KEY_PAYLOAD=$(cat <<PAYLOAD
   "ansible_url": "${ANSIBLE_URL}",
   "admin_user": "${ANSIBLE_ADMIN_USER}",
   "admin_password": "${ANSIBLE_ADMIN_PASSWORD}",
-  "target_user_id": 0,
+  "target_user_id": ${TARGET_USER_ID},
   "token_id": 0,
   "token": "",
   "token_scope": "write",

@@ -315,10 +315,13 @@ Edit `kubernetes/awx/awx-instance.yaml`:
 ```yaml
 spec:
   hostname: ansible.example.com          # your hostname
+  ingress_class_name: nginx              # your ingress class (nginx, traefik, etc.)
   ingress_tls_secret: awx-tls
   ingress_annotations: |
     cert-manager.io/cluster-issuer: your-cluster-issuer  # your cert issuer
 ```
+
+> **Storage class:** The manifest omits `postgres_storage_class` and `projects_storage_class` so Kubernetes uses your cluster's default StorageClass. If you need a specific one (e.g., `gp2` on EKS, `standard` on GKE), uncomment and set those fields in `awx-instance.yaml`.
 
 Edit `kubernetes/awx/certificate.yaml`:
 
@@ -417,8 +420,11 @@ echo "<k3s-host-ip> ansible.example.com" | sudo tee -a /etc/hosts
 
 #### 1.4 Edit the AWX configuration
 
-Edit `kubernetes/awx/awx-instance.yaml` and `kubernetes/awx/certificate.yaml`:
+Edit `kubernetes/awx/awx-instance.yaml`:
 - Set `hostname` to `ansible.example.com` (or whatever you chose)
+- Change `ingress_class_name` from `nginx` to `traefik` (K3s ships Traefik by default)
+
+Edit `kubernetes/awx/certificate.yaml`:
 - Set the cert-manager issuer to `selfsigned-issuer`
 
 #### 1.5 Deploy AWX
@@ -431,6 +437,14 @@ kubectl apply -k kubernetes/awx/
 kubectl wait --for=condition=Established crd/awxs.awx.ansible.com --timeout=60s
 kubectl apply -f kubernetes/awx/awx-instance.yaml
 ```
+
+> **Known issue — kube-rbac-proxy image pull failure:** AWX Operator v2.19.1 references a `kube-rbac-proxy` image that may fail to pull on some clusters. If the operator pod stays in `ImagePullBackOff`, run:
+>
+> ```bash
+> kubectl patch deployment awx-operator-controller-manager -n ansible \
+>   --type='json' \
+>   -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/image", "value":"registry.k8s.io/kubebuilder/kube-rbac-proxy:v0.16.0"}]'
+> ```
 
 #### 1.6 Wait for readiness
 
@@ -467,9 +481,94 @@ curl -sk -u "admin:${AWX_PASS}" -X POST "${AWX_URL}/api/v2/users/" \
   }'
 ```
 
-Note the user `id` from the response - you'll need it for the Akeyless payload.
+Note the user `id` from the response — you'll need it for the Akeyless payload in Step 3.
 
-Then create an organization, inventory, project, and job template for the demo. See `ansible/playbooks/demo/server-build.yml` for the playbook that AWX will run.
+### 1.9 Create the organization, project, inventory, and job template
+
+These AWX objects are required before you can run the demo pipeline.
+
+```bash
+AWX_URL="https://ansible.example.com"
+AWX_PASS="<admin password from step 1.6 or 1.7>"
+
+# Create an organization
+ORG_ID=$(curl -sk -u "admin:${AWX_PASS}" -X POST "${AWX_URL}/api/v2/organizations/" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Demo", "description": "Demo organization for credential rotation"}' \
+  | jq -r '.id')
+echo "Organization ID: ${ORG_ID}"
+
+# Grant the service account access to the organization
+SVC_USER_ID="<user id from step 1.8>"
+curl -sk -u "admin:${AWX_PASS}" -X POST \
+  "${AWX_URL}/api/v2/organizations/${ORG_ID}/users/" \
+  -H "Content-Type: application/json" \
+  -d "{\"id\": ${SVC_USER_ID}}"
+
+# Make the service account an admin of the org (so it can launch jobs)
+curl -sk -u "admin:${AWX_PASS}" -X POST \
+  "${AWX_URL}/api/v2/organizations/${ORG_ID}/admins/" \
+  -H "Content-Type: application/json" \
+  -d "{\"id\": ${SVC_USER_ID}}"
+
+# Create a project (SCM-based, pointing to this repo)
+PROJECT_ID=$(curl -sk -u "admin:${AWX_PASS}" -X POST "${AWX_URL}/api/v2/projects/" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"name\": \"Credential Rotation Demo\",
+    \"organization\": ${ORG_ID},
+    \"scm_type\": \"git\",
+    \"scm_url\": \"https://github.com/Fahmy-Kadiri-akl/ansible-credential-rotation.git\",
+    \"scm_branch\": \"main\",
+    \"scm_update_on_launch\": true
+  }" | jq -r '.id')
+echo "Project ID: ${PROJECT_ID}"
+
+# Wait for the initial project sync to finish
+echo "Waiting for project sync..."
+for i in $(seq 1 30); do
+  STATUS=$(curl -sk -u "admin:${AWX_PASS}" "${AWX_URL}/api/v2/projects/${PROJECT_ID}/" | jq -r '.status')
+  if [ "$STATUS" = "successful" ]; then echo "  Project synced."; break; fi
+  sleep 2
+done
+
+# Create an inventory
+INV_ID=$(curl -sk -u "admin:${AWX_PASS}" -X POST "${AWX_URL}/api/v2/inventories/" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"name\": \"Local\",
+    \"organization\": ${ORG_ID}
+  }" | jq -r '.id')
+echo "Inventory ID: ${INV_ID}"
+
+# Add localhost to the inventory
+curl -sk -u "admin:${AWX_PASS}" -X POST "${AWX_URL}/api/v2/inventories/${INV_ID}/hosts/" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "localhost", "variables": "ansible_connection: local"}'
+
+# Create the job template
+JT_ID=$(curl -sk -u "admin:${AWX_PASS}" -X POST "${AWX_URL}/api/v2/job_templates/" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"name\": \"Server Build\",
+    \"organization\": ${ORG_ID},
+    \"project\": ${PROJECT_ID},
+    \"inventory\": ${INV_ID},
+    \"playbook\": \"ansible/playbooks/demo/server-build.yml\",
+    \"ask_variables_on_launch\": true
+  }" | jq -r '.id')
+echo "Job Template ID: ${JT_ID}"
+
+echo ""
+echo "AWX setup complete. Summary:"
+echo "  Organization:  ${ORG_ID}"
+echo "  Project:       ${PROJECT_ID}"
+echo "  Inventory:     ${INV_ID}"
+echo "  Job Template:  ${JT_ID}"
+echo "  Service User:  ${SVC_USER_ID}"
+```
+
+> **Tip:** Save the service account user ID (`SVC_USER_ID`) — you'll need it when configuring the Akeyless rotated secret payloads in Step 3.
 
 ---
 
@@ -479,7 +578,15 @@ You can deploy the custom producer using **Kubernetes** or **Docker Compose**.
 
 ### Option A: Kubernetes
 
-#### 2.1 Build and push the image
+#### 2.1 Pull or build the image
+
+A pre-built image is available on GitHub Container Registry:
+
+```
+ghcr.io/fahmy-kadiri-akl/ansible-cred-producer:latest
+```
+
+The default Kubernetes manifest already references this image. If you want to build your own:
 
 ```bash
 cd custom-producer
@@ -491,7 +598,7 @@ docker push <your-registry>/ansible-cred-producer:latest
 
 Edit `custom-producer/kubernetes/deployment.yaml`:
 
-- Set the `image` to your registry path
+- If you built your own image, update the `image` field to your registry path
 - Set the `akeyless-access-id` in the Secret to your Akeyless Gateway access ID
 - Set the ingress `host` to your hostname (e.g., `ansible-producer.example.com`)
 - Set the cert-manager issuer annotation to match your cluster
@@ -752,3 +859,5 @@ kubectl rollout restart deployment/ansible-cred-producer -n ansible
 | Webhook not received | Event forwarder misconfigured | Verify: `akeyless event-forwarder-get --name ansible-eda-rotation-forwarder` |
 | AWX user lookup fails | `target_user_id` is 0 and username doesn't match | Set `target_user_id` explicitly in the payload, or verify the username exists in AWX |
 | `SKIP_AUTH=true` in production | Auth is disabled | Remove `SKIP_AUTH` env var: `kubectl set env deployment/ansible-cred-producer -n ansible SKIP_AUTH-` |
+| AWX operator pod `ImagePullBackOff` | `kube-rbac-proxy` image reference is stale | Patch the image: `kubectl patch deployment awx-operator-controller-manager -n ansible --type='json' -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/image", "value":"registry.k8s.io/kubebuilder/kube-rbac-proxy:v0.16.0"}]'` |
+| K3s ingress not routing traffic | AWX manifest uses `nginx` but K3s ships `traefik` | Change `ingress_class_name` to `traefik` in `awx-instance.yaml` |
