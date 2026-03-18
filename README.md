@@ -315,13 +315,47 @@ Edit `kubernetes/awx/awx-instance.yaml`:
 ```yaml
 spec:
   hostname: ansible.example.com          # your hostname
-  ingress_class_name: nginx              # your ingress class (nginx, traefik, etc.)
+  ingress_class_name: nginx              # your ingress class — see cloud-specific notes below
   ingress_tls_secret: awx-tls
   ingress_annotations: |
     cert-manager.io/cluster-issuer: your-cluster-issuer  # your cert issuer
 ```
 
 > **Storage class:** The manifest omits `postgres_storage_class` and `projects_storage_class` so Kubernetes uses your cluster's default StorageClass. If you need a specific one (e.g., `gp2` on EKS, `standard` on GKE), uncomment and set those fields in `awx-instance.yaml`.
+
+**Cloud-specific ingress class:**
+
+| Cloud / Platform | `ingress_class_name` | Notes |
+|------------------|----------------------|-------|
+| **GKE / GCE** | `gce` | Provisions a Google Cloud HTTP(S) Load Balancer with a public IP |
+| **EKS** | `alb` | Requires the AWS Load Balancer Controller; use annotation `alb.ingress.kubernetes.io/scheme: internet-facing` |
+| **AKS** | `nginx` | Azure ships an nginx ingress add-on; alternatively use `azure/application-gateway` |
+| **K3s** | `traefik` | Included by default |
+| **MicroK8s** | `nginx` | Enable with `microk8s enable ingress` |
+| **Self-managed nginx** | `nginx` | Ensure the controller service is `type: LoadBalancer` for external access |
+
+For **GCE/GKE**, after deploying the AWX instance the ingress takes 2–3 minutes to provision a load balancer. Watch for the external IP:
+
+```bash
+kubectl get ingress -n ansible -w
+# Wait until the ADDRESS column shows a public IP
+```
+
+Then create a DNS A record pointing your hostname to that IP.
+
+> **Tip:** If you already deployed with the wrong ingress class (e.g., nginx showing `127.0.0.1` on GCE), fix it in-place:
+>
+> ```bash
+> kubectl delete ingress awx-ingress -n ansible
+> kubectl patch awx awx -n ansible --type=merge -p '{
+>   "spec": {
+>     "ingress_class_name": "gce",
+>     "hostname": "your-hostname.example.com"
+>   }
+> }'
+> ```
+>
+> The operator will recreate the ingress with the correct class.
 
 Edit `kubernetes/awx/certificate.yaml`:
 
