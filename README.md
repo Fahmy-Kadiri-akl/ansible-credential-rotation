@@ -481,13 +481,7 @@ kubectl wait --for=condition=Established crd/awxs.awx.ansible.com --timeout=120s
 kubectl apply -f kubernetes/awx/awx-instance.yaml
 ```
 
-> **Known issue — kube-rbac-proxy image pull failure:** AWX Operator v2.19.1 references a `kube-rbac-proxy` image that may fail to pull on some clusters. If the operator pod stays in `ImagePullBackOff`, run:
->
-> ```bash
-> kubectl patch deployment awx-operator-controller-manager -n ansible \
->   --type='json' \
->   -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/image", "value":"registry.k8s.io/kubebuilder/kube-rbac-proxy:v0.16.0"}]'
-> ```
+> **Note:** The `kustomization.yaml` includes an image override for `kube-rbac-proxy` to fix a stale image reference in AWX Operator v2.19.1. No manual patching is needed.
 
 #### 1.6 Wait for readiness
 
@@ -904,7 +898,7 @@ kubectl rollout restart deployment/ansible-cred-producer -n ansible
 | Webhook not received | Event forwarder misconfigured | Verify: `akeyless event-forwarder-get --name ansible-eda-rotation-forwarder` |
 | AWX user lookup fails | `target_user_id` is 0 and username doesn't match | Set `target_user_id` explicitly in the payload, or verify the username exists in AWX |
 | `SKIP_AUTH=true` in production | Auth is disabled | Remove `SKIP_AUTH` env var: `kubectl set env deployment/ansible-cred-producer -n ansible SKIP_AUTH-` |
-| AWX operator pod `ImagePullBackOff` | `kube-rbac-proxy` image reference is stale | Patch the image: `kubectl patch deployment awx-operator-controller-manager -n ansible --type='json' -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/image", "value":"registry.k8s.io/kubebuilder/kube-rbac-proxy:v0.16.0"}]'` |
+| AWX operator pod `ImagePullBackOff` | `kube-rbac-proxy` image reference is stale | Fixed automatically by the kustomize image override. If deploying from a custom kustomization, add the image override for `gcr.io/kubebuilder/kube-rbac-proxy` → `registry.k8s.io/kubebuilder/kube-rbac-proxy:v0.16.0` |
 | K3s ingress not routing traffic | AWX manifest uses `nginx` but K3s ships `traefik` | Change `ingress_class_name` to `traefik` in `awx-instance.yaml` |
 | AWX ingress shows `127.0.0.1` on GCE/GKE | Using `nginx` class instead of `gce` | Change `ingress_class_name` to `gce` (see cloud-specific table in Step 1.3) |
 | AWX unreachable or returns wrong app | Hostname conflict — another ingress uses the same host | AWX needs its own unique hostname. Check with: `kubectl get ingress --all-namespaces -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name,HOST:.spec.rules[*].host'` |
