@@ -4,6 +4,26 @@ Automatically rotate Ansible AAP/AWX service account passwords and API tokens us
 
 ---
 
+## Table of Contents
+
+1. [The Problem](#the-problem)
+2. [What This Solves](#what-this-solves)
+3. [How It Works](#how-it-works)
+4. [Prerequisites](#prerequisites)
+5. [Repository Layout](#repository-layout)
+6. [Component Overview](#component-overview)
+7. [Step 1 - Deploy AWX](#step-1--deploy-awx)
+8. [Step 2 - Deploy the Custom Producer](#step-2--deploy-the-custom-producer)
+9. [Step 3 - Configure Akeyless](#step-3--configure-akeyless)
+10. [Step 4 - Run the CI/CD Pipeline](#step-4--run-the-cicd-pipeline)
+11. [Step 5 - Enable Event-Driven Push (Optional)](#step-5--enable-event-driven-push-optional)
+12. [Step 6 - Enable Email Notifications (Optional)](#step-6--enable-email-notifications-optional)
+13. [Step 7 - Validate](#step-7--validate)
+14. [Operations Guide](#operations-guide)
+15. [Troubleshooting](#troubleshooting)
+
+---
+
 ## The Problem
 
 Ansible Automation Platform (AAP) and AWX have no built-in mechanism for rotating service account credentials. In practice, this means:
@@ -32,26 +52,6 @@ This repository provides a complete, working solution for automated Ansible cred
 | API keys accumulate and are never revoked | API token rotation uses a create-before-revoke pattern - the old token is automatically deleted after the new one is confirmed |
 
 The result is that teams can onboard to Ansible automation with a standard, secure credential lifecycle already in place - rather than figuring it out after the fact.
-
----
-
-## Table of Contents
-
-1. [The Problem](#the-problem)
-2. [What This Solves](#what-this-solves)
-3. [How It Works](#how-it-works)
-4. [Prerequisites](#prerequisites)
-5. [Repository Layout](#repository-layout)
-6. [Component Overview](#component-overview)
-7. [Step 1 - Deploy AWX](#step-1--deploy-awx)
-8. [Step 2 - Deploy the Custom Producer](#step-2--deploy-the-custom-producer)
-9. [Step 3 - Configure Akeyless](#step-3--configure-akeyless)
-10. [Step 4 - Run the CI/CD Pipeline](#step-4--run-the-cicd-pipeline)
-11. [Step 5 - Enable Event-Driven Push (Optional)](#step-5--enable-event-driven-push-optional)
-12. [Step 6 - Enable Email Notifications (Optional)](#step-6--enable-email-notifications-optional)
-13. [Step 7 - Validate](#step-7--validate)
-14. [Operations Guide](#operations-guide)
-15. [Troubleshooting](#troubleshooting)
 
 ---
 
