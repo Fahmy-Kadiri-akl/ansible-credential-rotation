@@ -15,9 +15,10 @@ Automatically rotate Ansible AAP/AWX service account passwords and API tokens us
 7. [Step 3 - Configure Akeyless](#step-3--configure-akeyless)
 8. [Step 4 - Run the CI/CD Pipeline](#step-4--run-the-cicd-pipeline)
 9. [Step 5 - Enable Event-Driven Push (Optional)](#step-5--enable-event-driven-push-optional)
-10. [Step 6 - Validate](#step-6--validate)
-11. [Operations Guide](#operations-guide)
-12. [Troubleshooting](#troubleshooting)
+10. [Step 6 - Enable Email Notifications (Optional)](#step-6--enable-email-notifications-optional)
+11. [Step 7 - Validate](#step-7--validate)
+12. [Operations Guide](#operations-guide)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -949,7 +950,160 @@ The EDA rulebook routes `rotated-secret-success` events to the update playbook a
 
 ---
 
-## Step 6 - Validate
+## Step 6 - Enable Email Notifications (Optional)
+
+Akeyless Event Center can send email notifications when a rotation succeeds or fails. This is independent of the EDA webhook — you can use one, both, or neither.
+
+### Supported Forwarder Types
+
+| Type | Use case |
+|------|----------|
+| **Email** | Send notifications directly to one or more email addresses |
+| **Slack** | Post to a Slack channel via webhook |
+| **Teams** | Post to a Microsoft Teams channel via webhook |
+| **Webhook** | Send to any HTTP endpoint (used by EDA in Step 5) |
+| **ServiceNow** | Create incidents or events in ServiceNow |
+
+### Available Event Types
+
+These are the event types you can subscribe to. For credential rotation, the two most relevant are `rotated-secret-success` and `rotated-secret-failure`.
+
+| Event Type | Description |
+|------------|-------------|
+| `rotated-secret-success` | A rotated secret was successfully rotated |
+| `rotated-secret-failure` | A rotation attempt failed |
+| `next-automatic-rotation` | A scheduled auto-rotation is about to happen |
+| `dynamic-secret-failure` | A dynamic secret producer failed |
+| `static-secret-updated` | A static secret value was changed |
+| `certificate-pending-expiration` | A certificate is approaching expiration |
+| `certificate-expired` | A certificate has expired |
+| `certificate-provisioning-success` | A certificate was provisioned successfully |
+| `certificate-provisioning-failure` | Certificate provisioning failed |
+| `auth-method-pending-expiration` | An auth method is approaching expiration |
+| `auth-method-expired` | An auth method has expired |
+| `multi-auth-failure` | Multiple authentication failures detected |
+| `uid-rotation-failure` | Universal Identity token rotation failed |
+| `gateway-inactive` | A gateway became inactive |
+| `rate-limiting` | API rate limits were hit |
+
+### 6.1 Permissions
+
+Creating an event forwarder requires the **Gateway's own access ID** — the access ID the gateway authenticates with, not a user access ID. This is because the event forwarder is a gateway-level resource.
+
+| Requirement | Details |
+|-------------|---------|
+| **Gateway access ID** | The `gatewayAccessId` from your Helm values or gateway configuration |
+| **Gateway access key** | Stored as a Kubernetes secret (see your Helm values for `gatewayCredentialsExistingSecret`) |
+| **Gateway Allowed Access** | The gateway access ID needs `event_forwarding` in its Gateway Allowed Access permissions |
+| **RBAC** | The gateway access ID's role needs `read`, `list`, `create` on the event forwarder path |
+
+To retrieve the gateway access key from Kubernetes:
+
+```bash
+kubectl get secret <gateway-credentials-secret> -n <gateway-namespace> \
+  -o jsonpath='{.data.gateway-access-key}' | base64 -d
+```
+
+### 6.2 Create the email forwarder
+
+Authenticate as the gateway access ID, then create the forwarder:
+
+```bash
+# Authenticate as the gateway
+GW_TOKEN=$(akeyless auth \
+  --access-id "<gateway-access-id>" \
+  --access-type access_key \
+  --access-key "<gateway-access-key>" \
+  --json | jq -r '.token')
+
+# Create the email event forwarder
+akeyless event-forwarder create email \
+  --name "rotation-email-notification" \
+  --email-to "you@example.com" \
+  --items-event-source-locations "/Ansible/Credentials/*" \
+  --event-types rotated-secret-success \
+  --event-types rotated-secret-failure \
+  --runner-type immediate \
+  --gateway-url "${AKEYLESS_GATEWAY_URL}" \
+  --token "${GW_TOKEN}"
+```
+
+**Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `--name` | A unique name for this forwarder |
+| `--email-to` | Comma-separated list of recipient email addresses |
+| `--items-event-source-locations` | Secret path pattern to watch (e.g., `/Ansible/Credentials/*` for all secrets in that folder) |
+| `--event-types` | Which events trigger a notification. Repeat the flag for multiple types. |
+| `--runner-type` | `immediate` sends on each event. `periodic` batches events and sends every `--every` hours. |
+| `--gateway-url` | Your Akeyless Gateway URL |
+| `--token` | Auth token from the gateway access ID |
+
+> **Note:** The `--event-types` flag must be repeated for each type — comma-separated values in a single flag are not accepted by the CLI.
+
+### 6.3 Verify the forwarder
+
+```bash
+akeyless event-forwarder get \
+  --name "rotation-email-notification" \
+  --token "${GW_TOKEN}" \
+  --json
+```
+
+### 6.4 Test with a manual rotation
+
+Trigger a rotation and check your inbox:
+
+```bash
+akeyless gateway-rotate-secret \
+  --name /Ansible/Credentials/server-build-svc \
+  --gateway-url "${AKEYLESS_GATEWAY_URL}" \
+  --token "${GW_TOKEN}"
+```
+
+You should receive an email at the configured address within a few seconds of the rotation completing.
+
+### 6.5 Managing the forwarder
+
+```bash
+# Update recipients or event types
+akeyless event-forwarder update email \
+  --name "rotation-email-notification" \
+  --email-to "you@example.com,team@example.com" \
+  --event-types rotated-secret-success \
+  --event-types rotated-secret-failure \
+  --event-types next-automatic-rotation \
+  --token "${GW_TOKEN}"
+
+# Delete the forwarder
+akeyless event-forwarder delete \
+  --name "rotation-email-notification" \
+  --token "${GW_TOKEN}"
+```
+
+### 6.6 Using periodic digests instead of immediate notifications
+
+If you don't want an email on every single rotation, use `--runner-type periodic` with `--every` to batch notifications:
+
+```bash
+akeyless event-forwarder create email \
+  --name "rotation-daily-digest" \
+  --email-to "team@example.com" \
+  --items-event-source-locations "/Ansible/Credentials/*" \
+  --event-types rotated-secret-success \
+  --event-types rotated-secret-failure \
+  --runner-type periodic \
+  --every 24 \
+  --gateway-url "${AKEYLESS_GATEWAY_URL}" \
+  --token "${GW_TOKEN}"
+```
+
+This sends a single digest email every 24 hours with all rotation events that occurred during that period.
+
+---
+
+## Step 7 - Validate
 
 Run the end-to-end test suite:
 
