@@ -76,7 +76,6 @@ akeyless rotated-secret create custom \
   --gateway-url "${GATEWAY_URL}" \
   --target-name "${SECRETS_FOLDER}/ansible-producer-target" \
   --authentication-credentials use-user-creds \
-  --rotator-type custom \
   --custom-payload "${PASSWORD_PAYLOAD}" \
   --auto-rotate true \
   --rotation-interval 7
@@ -105,7 +104,6 @@ akeyless rotated-secret create custom \
   --gateway-url "${GATEWAY_URL}" \
   --target-name "${SECRETS_FOLDER}/ansible-producer-target" \
   --authentication-credentials use-user-creds \
-  --rotator-type custom \
   --custom-payload "${API_KEY_PAYLOAD}" \
   --auto-rotate true \
   --rotation-interval 7

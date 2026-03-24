@@ -74,20 +74,24 @@ These are set at creation time in `akeyless-setup/setup.sh` and can be changed l
 
 ```bash
 # Change to daily rotation
-akeyless update-rotated-secret \
+akeyless rotated-secret update custom \
   --name /Ansible/Credentials/server-build-svc \
+  --gateway-url "${AKEYLESS_GATEWAY_URL}" \
   --rotation-interval 1
 
 # Or disable auto-rotation entirely (manual only)
-akeyless update-rotated-secret \
+akeyless rotated-secret update custom \
   --name /Ansible/Credentials/server-build-svc \
+  --gateway-url "${AKEYLESS_GATEWAY_URL}" \
   --auto-rotate false
 ```
 
 You can also trigger an immediate rotation at any time without waiting for the schedule:
 
 ```bash
-akeyless gateway-rotate-secret --name /Ansible/Credentials/server-build-svc
+akeyless gateway-rotate-secret \
+  --name /Ansible/Credentials/server-build-svc \
+  --gateway-url "${AKEYLESS_GATEWAY_URL}"
 ```
 
 The rotation interval, last rotation time, and next scheduled rotation are all visible in the Akeyless Console under the item details, or via CLI:
@@ -735,13 +739,15 @@ This creates:
 ### 3.4 Test a manual rotation
 
 ```bash
-akeyless gateway-rotate-secret --name /Ansible/Credentials/server-build-svc
+akeyless gateway-rotate-secret \
+  --name /Ansible/Credentials/server-build-svc \
+  --gateway-url "${AKEYLESS_GATEWAY_URL}"
 ```
 
 Then verify the new value:
 
 ```bash
-akeyless get-rotated-secret-value --name /Ansible/Credentials/server-build-svc
+akeyless rotated-secret get-value --name /Ansible/Credentials/server-build-svc
 ```
 
 The returned payload should contain a new `password` field, and that password should work when authenticating to AWX.
@@ -869,7 +875,6 @@ akeyless rotated-secret create custom \
   --gateway-url "<gateway-url>" \
   --target-name "/Ansible/Credentials/ansible-producer-target" \
   --authentication-credentials use-user-creds \
-  --rotator-type custom \
   --custom-payload '<json-payload>' \
   --auto-rotate true \
   --rotation-interval 7
@@ -895,7 +900,7 @@ kubectl rollout restart deployment/ansible-cred-producer -n ansible
 | Rotation returns 404 | Web target URL doesn't include `/sync/rotate` | Update web target: `akeyless target update web --name <target> --url <producer-url>/sync/rotate` |
 | Rotation returns 401 | Gateway access ID mismatch | Verify `AKEYLESS_ACCESS_ID` env var in the producer matches the gateway's access ID |
 | Pipeline fails at step 3 | Password is stale or rotation failed | Check rotation status: `akeyless describe-item --name <secret>` and producer logs: `kubectl logs -n ansible deployment/ansible-cred-producer` |
-| Webhook not received | Event forwarder misconfigured | Verify: `akeyless event-forwarder-get --name ansible-eda-rotation-forwarder` |
+| Webhook not received | Event forwarder misconfigured | Verify: `akeyless event-forwarder get --name ansible-eda-rotation-forwarder` |
 | AWX user lookup fails | `target_user_id` is 0 and username doesn't match | Set `target_user_id` explicitly in the payload, or verify the username exists in AWX |
 | `SKIP_AUTH=true` in production | Auth is disabled | Remove `SKIP_AUTH` env var: `kubectl set env deployment/ansible-cred-producer -n ansible SKIP_AUTH-` |
 | AWX operator pod `ImagePullBackOff` | `kube-rbac-proxy` image reference is stale | Fixed automatically by the kustomize image override. If deploying from a custom kustomization, add the image override for `gcr.io/kubebuilder/kube-rbac-proxy` → `registry.k8s.io/kubebuilder/kube-rbac-proxy:v0.16.0` |
