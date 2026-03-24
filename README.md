@@ -196,6 +196,49 @@ API token rotation uses a create-before-revoke pattern. The producer first creat
 | **jq + curl** | Used by the setup, pipeline, and E2E test scripts. |
 | **DNS** | DNS records for AWX and the custom producer hostnames, resolving to your ingress IP. |
 
+### Minimum Akeyless Permissions
+
+The access ID used for rotation needs both **RBAC permissions** on the secret path and **Gateway Allowed Access** permissions. Without both, commands like `gateway-rotate-secret` will fail.
+
+#### RBAC (Access Role)
+
+Grant these capabilities on the `/Ansible/Credentials/` path (or wherever your rotated secrets live):
+
+| Capability | Required for |
+|------------|-------------|
+| `read` | Fetching the current rotated secret value (`rotated-secret get-value`) |
+| `update` | Triggering rotation (`gateway-rotate-secret`), updating secret config |
+| `create` | Initial secret creation (`rotated-secret create custom`) |
+| `list` | Listing secrets in the folder (`rotated-secret list`) |
+
+```bash
+akeyless set-role-rule \
+  --role-name "/Ansible/CredentialRotationRole" \
+  --path "/Ansible/Credentials/*" \
+  --capability read,update,create,list
+```
+
+#### Gateway Allowed Access
+
+The access ID must also be granted permissions on the Gateway itself. Without these, the Gateway will reject rotation requests even if RBAC is correct.
+
+| Gateway Permission | Required for |
+|--------------------|-------------|
+| `rotated_secret` | Managing rotated secret configuration on the Gateway |
+| `rotate_secret_value` | Triggering the actual rotation (`gateway-rotate-secret`) |
+| `event_forwarding` | Creating Event Center webhook forwarders (optional, for EDA push model) |
+| `targets` | Creating and managing web targets |
+
+```bash
+akeyless gateway-create-allowed-access \
+  --name "credential-rotation-access" \
+  --access-id "p-your-access-id" \
+  --permissions rotated_secret,rotate_secret_value,targets,event_forwarding \
+  --gateway-url "${AKEYLESS_GATEWAY_URL}"
+```
+
+> **Common failure:** If `gateway-rotate-secret` returns `404` or `permission denied`, the most likely cause is a missing Gateway Allowed Access entry. RBAC alone is not sufficient — the access ID must be explicitly granted `rotate_secret_value` on the Gateway.
+
 ---
 
 ## Repository Layout
