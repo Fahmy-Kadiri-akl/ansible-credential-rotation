@@ -4,21 +4,54 @@ Automatically rotate Ansible AAP/AWX service account passwords and API tokens us
 
 ---
 
+## The Problem
+
+Ansible Automation Platform (AAP) and AWX have no built-in mechanism for rotating service account credentials. In practice, this means:
+
+- **CI/CD pipelines authenticate to Ansible with static passwords or API keys.** These credentials are created once, stored in a vault or CI secret, and rarely changed. When they are changed, it's a manual process — update the password in Ansible, then go update every consumer that uses it, and hope nothing breaks in between.
+
+- **API keys are generated manually and never rotated.** As more teams adopt Ansible for automation, each team needs API keys for their integrations. There's no standard process for generating, rotating, or revoking these keys. They accumulate, go stale, and become a security liability.
+
+- **Credential sync is poll-based and fragile.** Organizations typically set up a scheduled job (e.g., a Monday morning cron) that pulls credentials from a vault and pushes them into Ansible. If the rotation happens after the sync, the credentials are stale until the next scheduled run. If the sync job fails silently, pipelines fail at the worst possible time.
+
+- **No one knows when credentials were last rotated.** Without automation, rotation depends on someone remembering to do it. Audit questions like "when was this service account password last changed?" have no reliable answer.
+
+These problems compound as the Ansible environment scales. One or two service accounts are manageable. Dozens across multiple teams, each with their own API keys and automation pipelines, are not.
+
+## What This Solves
+
+This repository provides a complete, working solution for automated Ansible credential rotation:
+
+| Problem | Solution |
+|---------|----------|
+| Passwords and API keys are never rotated | Akeyless rotates them automatically on a configurable schedule (e.g., every 7 days) |
+| Rotation is manual and error-prone | A stateless custom producer handles the rotation end-to-end — generate new credential, apply it to Ansible, return it to Akeyless for encrypted storage |
+| Consumers break when credentials change | Pipelines fetch the current credential from Akeyless at runtime, every time. They never hold a stale copy. |
+| Credential sync is delayed | Event-driven push via webhooks updates Ansible credential objects immediately when a rotation happens — no cron, no delay |
+| No visibility into rotation status | Akeyless tracks rotation history, schedules, and failures. Email/Slack/Teams notifications alert on success or failure. |
+| API keys accumulate and are never revoked | API token rotation uses a create-before-revoke pattern — the old token is automatically deleted after the new one is confirmed |
+
+The result is that teams can onboard to Ansible automation with a standard, secure credential lifecycle already in place — rather than figuring it out after the fact.
+
+---
+
 ## Table of Contents
 
-1. [How It Works](#how-it-works)
-2. [Prerequisites](#prerequisites)
-3. [Repository Layout](#repository-layout)
-4. [Component Overview](#component-overview)
-5. [Step 1 - Deploy AWX](#step-1--deploy-awx)
-6. [Step 2 - Deploy the Custom Producer](#step-2--deploy-the-custom-producer)
-7. [Step 3 - Configure Akeyless](#step-3--configure-akeyless)
-8. [Step 4 - Run the CI/CD Pipeline](#step-4--run-the-cicd-pipeline)
-9. [Step 5 - Enable Event-Driven Push (Optional)](#step-5--enable-event-driven-push-optional)
-10. [Step 6 - Enable Email Notifications (Optional)](#step-6--enable-email-notifications-optional)
-11. [Step 7 - Validate](#step-7--validate)
-12. [Operations Guide](#operations-guide)
-13. [Troubleshooting](#troubleshooting)
+1. [The Problem](#the-problem)
+2. [What This Solves](#what-this-solves)
+3. [How It Works](#how-it-works)
+4. [Prerequisites](#prerequisites)
+5. [Repository Layout](#repository-layout)
+6. [Component Overview](#component-overview)
+7. [Step 1 - Deploy AWX](#step-1--deploy-awx)
+8. [Step 2 - Deploy the Custom Producer](#step-2--deploy-the-custom-producer)
+9. [Step 3 - Configure Akeyless](#step-3--configure-akeyless)
+10. [Step 4 - Run the CI/CD Pipeline](#step-4--run-the-cicd-pipeline)
+11. [Step 5 - Enable Event-Driven Push (Optional)](#step-5--enable-event-driven-push-optional)
+12. [Step 6 - Enable Email Notifications (Optional)](#step-6--enable-email-notifications-optional)
+13. [Step 7 - Validate](#step-7--validate)
+14. [Operations Guide](#operations-guide)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
