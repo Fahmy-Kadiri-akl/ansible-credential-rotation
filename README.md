@@ -87,7 +87,7 @@ akeyless update-rotated-secret \
 You can also trigger an immediate rotation at any time without waiting for the schedule:
 
 ```bash
-akeyless rotated-secret rotate --name /Ansible/Credentials/server-build-svc
+akeyless gateway-rotate-secret --name /Ansible/Credentials/server-build-svc
 ```
 
 The rotation interval, last rotation time, and next scheduled rotation are all visible in the Akeyless Console under the item details, or via CLI:
@@ -735,7 +735,7 @@ This creates:
 ### 3.4 Test a manual rotation
 
 ```bash
-akeyless rotated-secret rotate --name /Ansible/Credentials/server-build-svc
+akeyless gateway-rotate-secret --name /Ansible/Credentials/server-build-svc
 ```
 
 Then verify the new value:
