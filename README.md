@@ -803,11 +803,17 @@ The pipeline script simulates what a real CI/CD system (GitHub Actions, GitLab C
 
 ### 4.1 Set environment variables
 
+The pipeline script uses API key authentication by default. You need both the access ID and access key from your Akeyless API key auth method.
+
+> **Where to find your access key:** The access key is shown only once when you create the auth method in the Akeyless Console. If you've lost it, check `~/.akeyless/profiles/default.toml` — the CLI stores it there after `akeyless auth`. You can also create a new API key auth method in the Console.
+
 ```bash
-export AKEYLESS_ACCESS_ID="p-your-access-id"
-export AKEYLESS_ACCESS_KEY="your-access-key"
-export AWX_URL="https://ansible.example.com"
+export AKEYLESS_ACCESS_ID="p-your-access-id"       # API key auth method access ID
+export AKEYLESS_ACCESS_KEY="your-access-key"        # API key auth method access key (base64 string)
+export AWX_URL="https://ansible.example.com"        # Your AWX/AAP URL
 ```
+
+For cloud-based authentication (AWS IAM, Azure AD, GCP, OIDC), see [Using Cloud Identity Instead of API Keys](#44-using-cloud-identity-instead-of-api-keys) below.
 
 ### 4.2 Run the pipeline
 
@@ -834,6 +840,69 @@ The `.github/workflows/server-build.yml` workflow wraps this script. Add these r
 - `AKEYLESS_ACCESS_KEY`
 
 Then trigger via **Actions > Server Build Pipeline > Run workflow**.
+
+### 4.4 Using Cloud Identity Instead of API Keys
+
+The pipeline script authenticates to Akeyless using an API key (`access_key`), but in production you should use your cloud platform's native identity so there are no long-lived secrets to manage. The REST API `/auth` endpoint accepts the same `access-type` values as the CLI.
+
+| Auth Method | `access-type` | What replaces `access-key` | Where the identity comes from |
+|-------------|---------------|---------------------------|-------------------------------|
+| **API Key** | `api_key` | `access-key` (static secret) | Manually created in Akeyless Console |
+| **AWS IAM** | `aws_iam` | `cloud-id` (signed STS request) | EC2 instance profile, ECS task role, or Lambda execution role. Use `akeyless auth --access-type aws_iam --cloud-id $(curl -s http://169.254.169.254/latest/meta-data/iam/info)` or generate via AWS SDK. |
+| **Azure AD** | `azure_ad` | `cloud-id` (MSI token) | Managed Identity on the VM, VMSS, or AKS pod. Fetch from `http://169.254.169.254/metadata/identity/oauth2/token`. |
+| **GCP IAM** | `gcp` | `cloud-id` (signed JWT) | Service account attached to GCE instance, GKE workload, or Cloud Run service. Fetch from metadata server. |
+| **Kubernetes** | `k8s` | `k8s-auth-config-name` + service account token | ServiceAccount token mounted at `/var/run/secrets/kubernetes.io/serviceaccount/token`. Requires a K8s auth method configured in Akeyless pointing to your cluster. |
+| **JWT/OIDC** | `jwt` or `oidc` | `jwt` (token string) | GitHub Actions OIDC (`ACTIONS_ID_TOKEN_REQUEST_TOKEN`), GitLab CI `CI_JOB_JWT`, or any OIDC provider. |
+| **Universal Identity** | `universal_identity` | `uid-token` | Token issued by Akeyless for on-prem machines without cloud identity. |
+
+**Example — replacing API key auth with AWS IAM in the pipeline:**
+
+```bash
+# Instead of:
+#   export AKEYLESS_ACCESS_ID="p-your-access-id"
+#   export AKEYLESS_ACCESS_KEY="your-access-key"
+
+# Generate the cloud-id (signed GetCallerIdentity request)
+CLOUD_ID=$(python3 -c "
+import boto3, json, base64
+client = boto3.client('sts')
+url = 'https://sts.amazonaws.com/?Action=GetCallerIdentity&Version=2011-06-15'
+headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8'}
+req = client.generate_presigned_url('get_caller_identity', HttpMethod='GET')
+print(base64.b64encode(json.dumps({'sts_url': req}).encode()).decode())
+")
+
+# Authenticate
+TOKEN=$(curl -sf -X POST "${AKEYLESS_API}/auth" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"access-id\": \"p-your-aws-access-id\",
+    \"access-type\": \"aws_iam\",
+    \"cloud-id\": \"${CLOUD_ID}\"
+  }" | jq -r '.token')
+```
+
+**Example — GitHub Actions with OIDC (no secrets needed):**
+
+```bash
+# In your GitHub Actions workflow, add:
+#   permissions:
+#     id-token: write
+#
+# Then in the pipeline step:
+OIDC_TOKEN=$(curl -sf -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+  "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=akeyless.io" | jq -r '.value')
+
+TOKEN=$(curl -sf -X POST "${AKEYLESS_API}/auth" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"access-id\": \"p-your-oidc-access-id\",
+    \"access-type\": \"jwt\",
+    \"jwt\": \"${OIDC_TOKEN}\"
+  }" | jq -r '.token')
+```
+
+> **Note:** Whichever auth method you use, the access ID must still have the same [RBAC and Gateway permissions](#minimum-akeyless-permissions) documented in the Prerequisites section.
 
 ---
 
