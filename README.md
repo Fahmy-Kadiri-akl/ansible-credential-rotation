@@ -190,7 +190,7 @@ API token rotation uses a create-before-revoke pattern. The producer first creat
 |-------------|---------|
 | **Kubernetes cluster** | Any cluster (EKS, GKE, MicroK8s, etc.), or a single Linux machine where K3s will be installed. See Step 1 for both options. |
 | **Akeyless Gateway** | Deployed in the cluster and accessible. Needs an API key auth method. |
-| **Akeyless CLI** | Installed and authenticated (`akeyless auth`). |
+| **Akeyless CLI** | Optional. Used by `akeyless-setup/setup.sh` and for manual operations. Not a runtime dependency — the pipeline and custom producer use the REST API directly via `curl`. All setup steps can also be done through the Akeyless Console UI. |
 | **kubectl** | v1.14+ (includes built-in kustomize via `kubectl apply -k`). Configured to talk to your cluster. |
 | **Docker** | Only if building the custom producer image yourself. A pre-built public image is available on GHCR. |
 | **jq + curl** | Used by the setup, pipeline, and E2E test scripts. |
