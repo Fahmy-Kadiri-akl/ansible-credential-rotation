@@ -8,7 +8,7 @@ Automatically rotate Ansible AAP/AWX service account passwords and API tokens us
 
 Ansible Automation Platform (AAP) and AWX have no built-in mechanism for rotating service account credentials. In practice, this means:
 
-- **CI/CD pipelines authenticate to Ansible with static passwords or API keys.** These credentials are created once, stored in a vault or CI secret, and rarely changed. When they are changed, it's a manual process — update the password in Ansible, then go update every consumer that uses it, and hope nothing breaks in between.
+- **CI/CD pipelines authenticate to Ansible with static passwords or API keys.** These credentials are created once, stored in a vault or CI secret, and rarely changed. When they are changed, it's a manual process - update the password in Ansible, then go update every consumer that uses it, and hope nothing breaks in between.
 
 - **API keys are generated manually and never rotated.** As more teams adopt Ansible for automation, each team needs API keys for their integrations. There's no standard process for generating, rotating, or revoking these keys. They accumulate, go stale, and become a security liability.
 
@@ -25,13 +25,13 @@ This repository provides a complete, working solution for automated Ansible cred
 | Problem | Solution |
 |---------|----------|
 | Passwords and API keys are never rotated | Akeyless rotates them automatically on a configurable schedule (e.g., every 7 days) |
-| Rotation is manual and error-prone | A stateless custom producer handles the rotation end-to-end — generate new credential, apply it to Ansible, return it to Akeyless for encrypted storage |
+| Rotation is manual and error-prone | A stateless custom producer handles the rotation end-to-end - generate new credential, apply it to Ansible, return it to Akeyless for encrypted storage |
 | Consumers break when credentials change | Pipelines fetch the current credential from Akeyless at runtime, every time. They never hold a stale copy. |
-| Credential sync is delayed | Event-driven push via webhooks updates Ansible credential objects immediately when a rotation happens — no cron, no delay |
+| Credential sync is delayed | Event-driven push via webhooks updates Ansible credential objects immediately when a rotation happens - no cron, no delay |
 | No visibility into rotation status | Akeyless tracks rotation history, schedules, and failures. Email/Slack/Teams notifications alert on success or failure. |
-| API keys accumulate and are never revoked | API token rotation uses a create-before-revoke pattern — the old token is automatically deleted after the new one is confirmed |
+| API keys accumulate and are never revoked | API token rotation uses a create-before-revoke pattern - the old token is automatically deleted after the new one is confirmed |
 
-The result is that teams can onboard to Ansible automation with a standard, secure credential lifecycle already in place — rather than figuring it out after the fact.
+The result is that teams can onboard to Ansible automation with a standard, secure credential lifecycle already in place - rather than figuring it out after the fact.
 
 ---
 
@@ -224,7 +224,7 @@ API token rotation uses a create-before-revoke pattern. The producer first creat
 |-------------|---------|
 | **Kubernetes cluster** | Any cluster (EKS, GKE, MicroK8s, etc.), or a single Linux machine where K3s will be installed. See Step 1 for both options. |
 | **Akeyless Gateway** | Deployed in the cluster and accessible. Needs an API key auth method. |
-| **Akeyless CLI** | Optional. Used by `akeyless-setup/setup.sh` and for manual operations. Not a runtime dependency — the pipeline and custom producer use the REST API directly via `curl`. All setup steps can also be done through the Akeyless Console UI. |
+| **Akeyless CLI** | Optional. Used by `akeyless-setup/setup.sh` and for manual operations. Not a runtime dependency - the pipeline and custom producer use the REST API directly via `curl`. All setup steps can also be done through the Akeyless Console UI. |
 | **kubectl** | v1.14+ (includes built-in kustomize via `kubectl apply -k`). Configured to talk to your cluster. |
 | **Docker** | Only if building the custom producer image yourself. A pre-built public image is available on GHCR. |
 | **jq + curl** | Used by the setup, pipeline, and E2E test scripts. |
@@ -271,7 +271,7 @@ akeyless gateway-create-allowed-access \
   --gateway-url "${AKEYLESS_GATEWAY_URL}"
 ```
 
-> **Common failure:** If `gateway-rotate-secret` returns `404` or `permission denied`, the most likely cause is a missing Gateway Allowed Access entry. RBAC alone is not sufficient — the access ID must be explicitly granted `rotate_secret_value` on the Gateway.
+> **Common failure:** If `gateway-rotate-secret` returns `404` or `permission denied`, the most likely cause is a missing Gateway Allowed Access entry. RBAC alone is not sufficient - the access ID must be explicitly granted `rotate_secret_value` on the Gateway.
 
 ---
 
@@ -389,7 +389,7 @@ kubectl create namespace ansible
 
 Add a DNS A record for your AWX hostname (e.g., `ansible.example.com`) pointing to your cluster's ingress IP.
 
-> **Important — hostname conflicts:** If you're using an nginx ingress controller and other services already run on this cluster, AWX **must have its own unique hostname**. Nginx routes by hostname — if two ingresses share the same host and path, one will shadow the other. For example, if your Akeyless Gateway is already on `gateway.example.com`, give AWX a different hostname like `ansible.example.com`. Do **not** reuse the gateway's hostname.
+> **Important - hostname conflicts:** If you're using an nginx ingress controller and other services already run on this cluster, AWX **must have its own unique hostname**. Nginx routes by hostname - if two ingresses share the same host and path, one will shadow the other. For example, if your Akeyless Gateway is already on `gateway.example.com`, give AWX a different hostname like `ansible.example.com`. Do **not** reuse the gateway's hostname.
 >
 > To check for conflicts:
 >
@@ -404,7 +404,7 @@ Edit `kubernetes/awx/awx-instance.yaml`:
 ```yaml
 spec:
   hostname: ansible.example.com          # your hostname
-  ingress_class_name: nginx              # your ingress class — see cloud-specific notes below
+  ingress_class_name: nginx              # your ingress class - see cloud-specific notes below
   ingress_tls_secret: awx-tls
   ingress_annotations: |
     cert-manager.io/cluster-issuer: your-cluster-issuer  # your cert issuer
@@ -458,7 +458,7 @@ spec:
 
 #### 1.4 Deploy
 
-Deploy in two steps — the operator must register its CRD before the AWX instance can be created:
+Deploy in two steps - the operator must register its CRD before the AWX instance can be created:
 
 ```bash
 # Step 1: Deploy the AWX Operator
@@ -599,7 +599,7 @@ curl -sk -u "admin:${AWX_PASS}" -X POST "${AWX_URL}/api/v2/users/" \
   }'
 ```
 
-Note the user `id` from the response — you'll need it for the Akeyless payload in Step 3.
+Note the user `id` from the response - you'll need it for the Akeyless payload in Step 3.
 
 ### 1.9 Create the organization, project, inventory, and job template
 
@@ -686,7 +686,7 @@ echo "  Job Template:  ${JT_ID}"
 echo "  Service User:  ${SVC_USER_ID}"
 ```
 
-> **Tip:** Save the service account user ID (`SVC_USER_ID`) — you'll need it when configuring the Akeyless rotated secret payloads in Step 3.
+> **Tip:** Save the service account user ID (`SVC_USER_ID`) - you'll need it when configuring the Akeyless rotated secret payloads in Step 3.
 
 ---
 
@@ -704,7 +704,7 @@ A pre-built public image is available on GitHub Container Registry:
 ghcr.io/fahmy-kadiri-akl/ansible-cred-producer:latest
 ```
 
-The default Kubernetes manifest already references this image — no build step needed.
+The default Kubernetes manifest already references this image - no build step needed.
 
 If you fork this repo and want your own image, the **Publish Custom Producer Image** GitHub Actions workflow automatically builds and pushes to GHCR on any push to `main` that changes `custom-producer/`. Or build manually:
 
@@ -839,7 +839,7 @@ The pipeline script simulates what a real CI/CD system (GitHub Actions, GitLab C
 
 The pipeline script uses API key authentication by default. You need both the access ID and access key from your Akeyless API key auth method.
 
-> **Where to find your access key:** The access key is shown only once when you create the auth method in the Akeyless Console. If you've lost it, check `~/.akeyless/profiles/default.toml` — the CLI stores it there after `akeyless auth`. You can also create a new API key auth method in the Console.
+> **Where to find your access key:** The access key is shown only once when you create the auth method in the Akeyless Console. If you've lost it, check `~/.akeyless/profiles/default.toml` - the CLI stores it there after `akeyless auth`. You can also create a new API key auth method in the Console.
 
 ```bash
 export AKEYLESS_ACCESS_ID="p-your-access-id"       # API key auth method access ID
@@ -889,7 +889,7 @@ The pipeline script authenticates to Akeyless using an API key (`access_key`), b
 | **JWT/OIDC** | `jwt` or `oidc` | `jwt` (token string) | GitHub Actions OIDC (`ACTIONS_ID_TOKEN_REQUEST_TOKEN`), GitLab CI `CI_JOB_JWT`, or any OIDC provider. |
 | **Universal Identity** | `universal_identity` | `uid-token` | Token issued by Akeyless for on-prem machines without cloud identity. |
 
-**Example — replacing API key auth with AWS IAM in the pipeline:**
+**Example - replacing API key auth with AWS IAM in the pipeline:**
 
 ```bash
 # Instead of:
@@ -916,7 +916,7 @@ TOKEN=$(curl -sf -X POST "${AKEYLESS_API}/auth" \
   }" | jq -r '.token')
 ```
 
-**Example — GitHub Actions with OIDC (no secrets needed):**
+**Example - GitHub Actions with OIDC (no secrets needed):**
 
 ```bash
 # In your GitHub Actions workflow, add:
@@ -985,7 +985,7 @@ The EDA rulebook routes `rotated-secret-success` events to the update playbook a
 
 ## Step 6 - Enable Email Notifications (Optional)
 
-Akeyless Event Center can send email notifications when a rotation succeeds or fails. This is independent of the EDA webhook — you can use one, both, or neither.
+Akeyless Event Center can send email notifications when a rotation succeeds or fails. This is independent of the EDA webhook - you can use one, both, or neither.
 
 ### Supported Forwarder Types
 
@@ -1021,7 +1021,7 @@ These are the event types you can subscribe to. For credential rotation, the two
 
 ### 6.1 Permissions
 
-Creating an event forwarder requires the **Gateway's own access ID** — the access ID the gateway authenticates with, not a user access ID. This is because the event forwarder is a gateway-level resource.
+Creating an event forwarder requires the **Gateway's own access ID** - the access ID the gateway authenticates with, not a user access ID. This is because the event forwarder is a gateway-level resource.
 
 | Requirement | Details |
 |-------------|---------|
@@ -1073,7 +1073,7 @@ akeyless event-forwarder create email \
 | `--gateway-url` | Your Akeyless Gateway URL |
 | `--token` | Auth token from the gateway access ID |
 
-> **Note:** The `--event-types` flag must be repeated for each type — comma-separated values in a single flag are not accepted by the CLI.
+> **Note:** The `--event-types` flag must be repeated for each type - comma-separated values in a single flag are not accepted by the CLI.
 
 ### 6.3 Verify the forwarder
 
@@ -1205,4 +1205,4 @@ kubectl rollout restart deployment/ansible-cred-producer -n ansible
 | AWX operator pod `ImagePullBackOff` | `kube-rbac-proxy` image reference is stale | Fixed automatically by the kustomize image override. If deploying from a custom kustomization, add the image override for `gcr.io/kubebuilder/kube-rbac-proxy` → `registry.k8s.io/kubebuilder/kube-rbac-proxy:v0.16.0` |
 | K3s ingress not routing traffic | AWX manifest uses `nginx` but K3s ships `traefik` | Change `ingress_class_name` to `traefik` in `awx-instance.yaml` |
 | AWX ingress shows `127.0.0.1` on GCE/GKE | Using `nginx` class instead of `gce` | Change `ingress_class_name` to `gce` (see cloud-specific table in Step 1.3) |
-| AWX unreachable or returns wrong app | Hostname conflict — another ingress uses the same host | AWX needs its own unique hostname. Check with: `kubectl get ingress --all-namespaces -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name,HOST:.spec.rules[*].host'` |
+| AWX unreachable or returns wrong app | Hostname conflict - another ingress uses the same host | AWX needs its own unique hostname. Check with: `kubectl get ingress --all-namespaces -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name,HOST:.spec.rules[*].host'` |
