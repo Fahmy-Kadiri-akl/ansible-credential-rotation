@@ -14,13 +14,14 @@ Automatically rotate Ansible AAP/AWX service account passwords and API tokens us
 6. [Component Overview](#component-overview)
 7. [Step 1 - Deploy AWX](#step-1--deploy-awx)
 8. [Step 2 - Deploy the Custom Producer](#step-2--deploy-the-custom-producer)
-9. [Step 3 - Configure Akeyless](#step-3--configure-akeyless)
-10. [Step 4 - Run the CI/CD Pipeline](#step-4--run-the-cicd-pipeline)
-11. [Step 5 - Enable Event-Driven Push (Optional)](#step-5--enable-event-driven-push-optional)
-12. [Step 6 - Enable Email Notifications (Optional)](#step-6--enable-email-notifications-optional)
-13. [Step 7 - Validate](#step-7--validate)
-14. [Operations Guide](#operations-guide)
-15. [Troubleshooting](#troubleshooting)
+9. [Step 3 - Set Up Certificate Authentication](#step-3--set-up-certificate-authentication)
+10. [Step 4 - Configure Akeyless](#step-4--configure-akeyless)
+11. [Step 5 - Run the CI/CD Pipeline](#step-5--run-the-cicd-pipeline)
+12. [Step 6 - Enable Event-Driven Push (Optional)](#step-6--enable-event-driven-push-optional)
+13. [Step 7 - Enable Email Notifications (Optional)](#step-7--enable-email-notifications-optional)
+14. [Step 8 - Validate](#step-8--validate)
+15. [Operations Guide](#operations-guide)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -262,7 +263,7 @@ API token rotation uses a create-before-revoke pattern. The producer first creat
 | Requirement | Details |
 |-------------|---------|
 | **Kubernetes cluster** | Any cluster (EKS, GKE, MicroK8s, etc.), or a single Linux machine where K3s will be installed. See Step 1 for both options. |
-| **Akeyless Gateway** | Deployed in the cluster and accessible. Needs a certificate auth method. |
+| **Akeyless Gateway** | Deployed in the cluster and accessible. Needs a certificate auth method - see the [Certificate Auth Guide](https://github.com/Fahmy-Kadiri-akl/akeyless-certificate-auth). |
 | **Akeyless CLI** | Optional. Used by `akeyless-setup/setup.sh` and for manual operations. Not a runtime dependency - the pipeline and custom producer use the REST API directly via `curl`. All setup steps can also be done through the Akeyless Console UI. |
 | **kubectl** | v1.14+ (includes built-in kustomize via `kubectl apply -k`). Configured to talk to your cluster. |
 | **Docker** | Only if building the custom producer image yourself. A pre-built public image is available on GHCR. |
@@ -859,7 +860,7 @@ The pipeline script simulates what a real CI/CD system (GitHub Actions, GitLab C
 
 The pipeline script uses certificate authentication. You need the access ID from your Akeyless certificate auth method, and the client certificate and private key as base64-encoded strings.
 
-> **Setting up certificate auth:** Create a certificate auth method in the Akeyless Console under **Auth Methods > New > Certificate**. Upload or paste the CA certificate that signed your client certificates. Then generate a client certificate signed by that CA.
+> **Setting up certificate auth:** If you haven't set up a certificate auth method yet, follow the [Akeyless Certificate Authentication Guide](https://github.com/Fahmy-Kadiri-akl/akeyless-certificate-auth). It walks through creating the auth method with your existing enterprise CA (Microsoft AD CS, AppViewX, Venafi), Akeyless internal PKI, or self-signed certificates for dev/test.
 
 ```bash
 export AKEYLESS_ACCESS_ID="p-your-access-id"                     # Certificate auth method access ID
