@@ -14,14 +14,13 @@ Automatically rotate Ansible AAP/AWX service account passwords and API tokens us
 6. [Component Overview](#component-overview)
 7. [Step 1 - Deploy AWX](#step-1--deploy-awx)
 8. [Step 2 - Deploy the Custom Producer](#step-2--deploy-the-custom-producer)
-9. [Step 3 - Set Up Certificate Authentication](#step-3--set-up-certificate-authentication)
-10. [Step 4 - Configure Akeyless](#step-4--configure-akeyless)
-11. [Step 5 - Run the CI/CD Pipeline](#step-5--run-the-cicd-pipeline)
-12. [Step 6 - Enable Event-Driven Push (Optional)](#step-6--enable-event-driven-push-optional)
-13. [Step 7 - Enable Email Notifications (Optional)](#step-7--enable-email-notifications-optional)
-14. [Step 8 - Validate](#step-8--validate)
-15. [Operations Guide](#operations-guide)
-16. [Troubleshooting](#troubleshooting)
+9. [Step 3 - Configure Akeyless](#step-3--configure-akeyless)
+10. [Step 4 - Run the CI/CD Pipeline](#step-4--run-the-cicd-pipeline)
+11. [Step 5 - Enable Event-Driven Push (Optional)](#step-5--enable-event-driven-push-optional)
+12. [Step 6 - Enable Email Notifications (Optional)](#step-6--enable-email-notifications-optional)
+13. [Step 7 - Validate](#step-7--validate)
+14. [Operations Guide](#operations-guide)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
