@@ -2,5 +2,7 @@
 collections:
   - name: akeyless.secrets_management
     version: ">=1.0.0"
+  - name: ansible.controller
+    version: ">=4.0.0"
   - name: ansible.eda
     version: ">=1.0.0"

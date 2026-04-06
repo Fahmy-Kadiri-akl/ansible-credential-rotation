@@ -3,8 +3,9 @@
 # This fetches rotated credentials from Akeyless and triggers an AWX job.
 #
 # Secrets required:
-#   AKEYLESS_ACCESS_ID  - Akeyless API key access ID
-#   AKEYLESS_ACCESS_KEY - Akeyless API key secret
+#   AKEYLESS_ACCESS_ID  - Akeyless certificate auth method access ID
+#   AKEYLESS_CERT_DATA  - Base64-encoded client certificate (PEM)
+#   AKEYLESS_KEY_DATA   - Base64-encoded client private key (PEM)
 
 name: Server Build Pipeline
 
@@ -37,7 +38,8 @@ jobs:
       - name: Run server build pipeline
         env:
           AKEYLESS_ACCESS_ID: ${{ secrets.AKEYLESS_ACCESS_ID }}
-          AKEYLESS_ACCESS_KEY: ${{ secrets.AKEYLESS_ACCESS_KEY }}
+          AKEYLESS_CERT_DATA: ${{ secrets.AKEYLESS_CERT_DATA }}
+          AKEYLESS_KEY_DATA: ${{ secrets.AKEYLESS_KEY_DATA }}
           AWX_URL: ${{ vars.AWX_URL }}
           SECRET_PATH: /Ansible/Credentials/server-build-svc
           SERVER_NAME: ${{ inputs.server_name }}

@@ -7,9 +7,12 @@
 # credential objects.
 #
 # Deploy this with:
-#   ansible-rulebook --rulebook eda/rulebooks/akeyless-rotation.yml \
-#     -i inventory/hosts \
-#     --vars eda/vars/akeyless.yml
+#   ansible-rulebook --rulebook ansible/eda/rulebooks/akeyless-rotation.yml \
+#     -i ansible/inventory/ \
+#     -e eda_webhook_token=<token> \
+#     -e controller_host=https://ansible.example.com \
+#     -e controller_username=admin \
+#     -e controller_password=secret
 #
 # The Akeyless Event Center webhook should POST to:
 #   http://<eda-host>:5000/endpoint

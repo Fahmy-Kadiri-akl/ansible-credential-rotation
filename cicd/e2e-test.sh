@@ -11,7 +11,8 @@
 #
 # Usage:
 #   export AKEYLESS_ACCESS_ID=p-xxxx
-#   export AKEYLESS_ACCESS_KEY=xxxx
+#   export AKEYLESS_CERT_DATA=$(base64 -w0 /path/to/cert.pem)
+#   export AKEYLESS_KEY_DATA=$(base64 -w0 /path/to/key.pem)
 #   ./e2e-test.sh
 # ==============================================================================
 set -euo pipefail
@@ -33,10 +34,10 @@ echo "=============================================="
 echo ""
 
 # Authenticate
-echo "[Auth] Authenticating to Akeyless..."
+echo "[Auth] Authenticating to Akeyless (certificate auth)..."
 TOKEN=$(curl -sf -X POST "${AKEYLESS_API}/auth" \
   -H "Content-Type: application/json" \
-  -d "{\"access-id\": \"${AKEYLESS_ACCESS_ID}\", \"access-key\": \"${AKEYLESS_ACCESS_KEY}\", \"access-type\": \"api_key\"}" \
+  -d "{\"access-id\": \"${AKEYLESS_ACCESS_ID}\", \"access-type\": \"cert\", \"cert-data\": \"${AKEYLESS_CERT_DATA}\", \"key-data\": \"${AKEYLESS_KEY_DATA}\"}" \
   | jq -r '.token')
 
 if [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ]; then

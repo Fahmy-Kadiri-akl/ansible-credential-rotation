@@ -3,7 +3,8 @@
 akeyless_api_url: "https://api.akeyless.io"
 akeyless_gateway_url: "https://your-gateway.example.com:8000"
 akeyless_access_id: "{{ lookup('env', 'AKEYLESS_ACCESS_ID') }}"
-akeyless_access_key: "{{ lookup('env', 'AKEYLESS_ACCESS_KEY') }}"
+akeyless_cert_file: "{{ lookup('env', 'AKEYLESS_CERT_FILE') | default('/etc/akeyless/cert.pem', true) }}"
+akeyless_key_file: "{{ lookup('env', 'AKEYLESS_KEY_FILE') | default('/etc/akeyless/key.pem', true) }}"
 
 # Akeyless secret paths
 akeyless_ansible_secrets_folder: "/Ansible/Credentials"

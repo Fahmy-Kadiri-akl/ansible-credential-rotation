@@ -16,7 +16,7 @@ set -euo pipefail
 
 # ----- Configuration (edit these) -----
 GATEWAY_URL="${AKEYLESS_GATEWAY_URL:-https://your-gateway.example.com:8000}"
-PRODUCER_URL="${PRODUCER_URL:-http://ansible-cred-producer.akeyless-producers.svc.cluster.local:8080}"
+PRODUCER_URL="${PRODUCER_URL:-http://rotator.rotator.svc.cluster.local:8080}"
 EDA_WEBHOOK_URL="${EDA_WEBHOOK_URL:-http://ansible-eda.example.com:5000/endpoint}"
 EDA_WEBHOOK_TOKEN="${EDA_WEBHOOK_TOKEN:-REPLACE_WITH_EDA_TOKEN}"
 SECRETS_FOLDER="${SECRETS_FOLDER:-/Ansible/Credentials}"
@@ -118,7 +118,7 @@ akeyless event-forwarder create webhook \
   --items-event-source-locations "${SECRETS_FOLDER}/*" \
   --event-types "rotated-secret-success,rotated-secret-failure" \
   --auth-type bearer-token \
-  --auth-token "$(echo -n "${EDA_WEBHOOK_TOKEN}" | base64)" \
+  --auth-token "${EDA_WEBHOOK_TOKEN}" \
   --runner-type immediate
 echo "Webhook forwarder created: ansible-eda-rotation-forwarder"
 

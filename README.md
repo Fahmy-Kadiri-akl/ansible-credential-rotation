@@ -66,6 +66,16 @@ Akeyless manages the full lifecycle of Ansible credentials. Rather than storing 
 config:
   look: handDrawn
   theme: base
+  themeVariables:
+    primaryColor: "#4A90D9"
+    primaryTextColor: "#fff"
+    primaryBorderColor: "#2D6CB4"
+    secondaryColor: "#5CB85C"
+    secondaryTextColor: "#fff"
+    secondaryBorderColor: "#449D44"
+    tertiaryColor: "#F0AD4E"
+    tertiaryTextColor: "#fff"
+    tertiaryBorderColor: "#D9960A"
 ---
 graph LR
     subgraph Akeyless["Akeyless Platform"]
@@ -91,11 +101,21 @@ graph LR
 
     CICD -- "1. auth + fetch creds" --> RS
     CICD -- "2. auth + launch job" --> AWX
+
+    style Akeyless fill:#4A90D9,stroke:#2D6CB4,color:#fff
+    style Infra fill:#5CB85C,stroke:#449D44,color:#fff
+    style RS fill:#6BA4E0,stroke:#2D6CB4,color:#fff
+    style GW fill:#6BA4E0,stroke:#2D6CB4,color:#fff
+    style EC fill:#6BA4E0,stroke:#2D6CB4,color:#fff
+    style CP fill:#78C878,stroke:#449D44,color:#fff
+    style AWX fill:#78C878,stroke:#449D44,color:#fff
+    style EDA fill:#78C878,stroke:#449D44,color:#fff
+    style CICD fill:#F0AD4E,stroke:#D9960A,color:#fff
 ```
 
 The Akeyless Gateway sits between the platform and your infrastructure. When a rotation is due, the gateway sends the current encrypted payload to the custom producer. The producer is a stateless Go service - it generates a new credential, applies it to AWX via the AWX API, and returns the updated payload for Akeyless to re-encrypt and store. Nothing is persisted on the producer side.
 
-On the consumer side, CI/CD pipelines authenticate to Akeyless with an API key, fetch the latest rotated value, and use it to authenticate to AWX. If Ansible EDA is deployed, Akeyless can also push a webhook notification the moment a rotation completes, so Ansible credential objects update immediately without waiting for a scheduled pull.
+On the consumer side, CI/CD pipelines authenticate to Akeyless with a client certificate, fetch the latest rotated value, and use it to authenticate to AWX. If Ansible EDA is deployed, Akeyless can also push a webhook notification the moment a rotation completes, so Ansible credential objects update immediately without waiting for a scheduled pull.
 
 ### Rotation Schedule
 
@@ -141,6 +161,14 @@ akeyless describe-item --name /Ansible/Credentials/server-build-svc
 config:
   look: handDrawn
   theme: base
+  themeVariables:
+    actorBkg: "#4A90D9"
+    actorTextColor: "#fff"
+    actorBorder: "#2D6CB4"
+    signalColor: "#333"
+    noteBkgColor: "#FFF3CD"
+    noteBorderColor: "#D9960A"
+    noteTextColor: "#333"
 ---
 sequenceDiagram
     participant AKL as Akeyless
@@ -167,7 +195,7 @@ sequenceDiagram
 
     Note over CICD: Pipeline starts (any time after rotation)
 
-    CICD->>AKL: POST /auth {access_id, access_key}
+    CICD->>AKL: POST /auth {access_id, cert_data, key_data}
     AKL-->>CICD: token
     CICD->>AKL: POST /get-rotated-secret-value {name}
     AKL-->>CICD: {password: new}
@@ -188,13 +216,23 @@ After the rotation succeeds, Akeyless Event Center can fire a webhook to notify 
 config:
   look: handDrawn
   theme: base
+  themeVariables:
+    actorBkg: "#4A90D9"
+    actorTextColor: "#fff"
+    actorBorder: "#2D6CB4"
+    signalColor: "#333"
+    noteBkgColor: "#FFF3CD"
+    noteBorderColor: "#D9960A"
+    noteTextColor: "#333"
 ---
 sequenceDiagram
     participant AKL as Akeyless
+    participant GW as Gateway
     participant CP as Custom Producer
     participant AWX as Ansible AWX
 
-    AKL->>CP: POST /sync/rotate {type: api_key, token_id: old}
+    AKL->>GW: Decrypt payload, send to web target
+    GW->>CP: POST /sync/rotate {type: api_key, token_id: old}
 
     Note over CP: Create-before-revoke pattern
 
@@ -202,7 +240,8 @@ sequenceDiagram
     AWX-->>CP: {id: new_id, token: new_token}
     CP->>AWX: DELETE /api/v2/tokens/old_id/
     AWX-->>CP: 204 No Content
-    CP-->>AKL: {payload: {token_id: new_id, token: new_token}}
+    CP-->>GW: {payload: {token_id: new_id, token: new_token}}
+    GW-->>AKL: Store encrypted payload
 
     Note over AKL: Old token revoked, new token stored
 ```
@@ -223,7 +262,7 @@ API token rotation uses a create-before-revoke pattern. The producer first creat
 | Requirement | Details |
 |-------------|---------|
 | **Kubernetes cluster** | Any cluster (EKS, GKE, MicroK8s, etc.), or a single Linux machine where K3s will be installed. See Step 1 for both options. |
-| **Akeyless Gateway** | Deployed in the cluster and accessible. Needs an API key auth method. |
+| **Akeyless Gateway** | Deployed in the cluster and accessible. Needs a certificate auth method. |
 | **Akeyless CLI** | Optional. Used by `akeyless-setup/setup.sh` and for manual operations. Not a runtime dependency - the pipeline and custom producer use the REST API directly via `curl`. All setup steps can also be done through the Akeyless Console UI. |
 | **kubectl** | v1.14+ (includes built-in kustomize via `kubectl apply -k`). Configured to talk to your cluster. |
 | **Docker** | Only if building the custom producer image yourself. A pre-built public image is available on GHCR. |
@@ -284,15 +323,8 @@ akeyless gateway-create-allowed-access \
 │   ├── awx-instance.yaml           #   AWX custom resource (replicas, ingress, storage)
 │   └── certificate.yaml            #   TLS certificate (cert-manager)
 │
-├── custom-producer/                # Go service implementing Akeyless custom producer protocol
-│   ├── main.go                     #   HTTP server, auth middleware, webhook receiver
-│   ├── internal/ansible/client.go  #   AWX API client (password, token, credential ops)
-│   ├── internal/producer/producer.go  # Rotation logic for password + API key types
-│   ├── internal/producer/types.go  #   Request/response structs and payload definitions
-│   ├── Dockerfile                  #   Multi-stage build (Go → Alpine)
-│   ├── docker-compose.yml          #   Docker Compose deployment (alternative to K8s)
-│   ├── .env.example                #   Example env vars for Docker Compose
-│   └── kubernetes/deployment.yaml  #   K8s Deployment + Service + Ingress + Secret
+├── kubernetes/custom-producer/      # K8s manifests for deploying the custom producer
+│   └── deployment.yaml             #   Deployment + Service + Secret (uses external image)
 │
 ├── akeyless-setup/
 │   └── setup.sh                    # Creates Akeyless web target, rotated secrets, webhook forwarder
@@ -322,13 +354,25 @@ akeyless gateway-create-allowed-access \
 └── .gitignore
 ```
 
+> **Note:** The custom producer source code lives in a separate repository:
+> [github.com/Fahmy-Kadiri-akl/custom-producer](https://github.com/Fahmy-Kadiri-akl/custom-producer).
+> This repo deploys the pre-built container image from that project.
+
 ---
 
 ## Component Overview
 
 ### Custom Producer
 
-A stateless Go HTTP service that the Akeyless Gateway calls when a rotation is triggered. It implements three endpoints:
+This project uses the [custom-producer](https://github.com/Fahmy-Kadiri-akl/custom-producer) - a single container that rotates credentials across 19+ target systems. The `type` field in the Akeyless payload dispatches to the correct handler. For Ansible, the relevant types are `password` and `api_key`.
+
+The pre-built image is available at:
+
+```
+ghcr.io/fahmy-kadiri-akl/custom-producer/rotator:latest
+```
+
+It implements three endpoints for the Akeyless custom producer protocol:
 
 | Endpoint | When called | What it does |
 |----------|------------|-------------|
@@ -360,12 +404,12 @@ No secrets are stored outside Akeyless. The custom producer is stateless.
 
 `cicd/pipeline-server-build.sh` is a self-contained bash script that any CI/CD system can call. It:
 
-1. Authenticates to Akeyless with an API key
+1. Authenticates to Akeyless with a client certificate
 2. Fetches the current (rotated) password from Akeyless
 3. Authenticates to AWX with that password
 4. Launches a job template and waits for completion
 
-It requires `AKEYLESS_ACCESS_ID` and `AKEYLESS_ACCESS_KEY` environment variables.
+It requires `AKEYLESS_ACCESS_ID`, `AKEYLESS_CERT_DATA`, and `AKEYLESS_KEY_DATA` environment variables.
 
 ---
 
@@ -692,84 +736,59 @@ echo "  Service User:  ${SVC_USER_ID}"
 
 ## Step 2 - Deploy the Custom Producer
 
-You can deploy the custom producer using **Kubernetes** or **Docker Compose**.
+The custom producer is maintained in a separate repository: [Fahmy-Kadiri-akl/custom-producer](https://github.com/Fahmy-Kadiri-akl/custom-producer). It is a single container that rotates credentials across 19+ target systems - for this project, the relevant types are `password` and `api_key`.
+
+You can deploy it using **Kubernetes** or **Docker**.
 
 ### Option A: Kubernetes
 
-#### 2.1 Pull or build the image
+#### 2.1 Edit the Kubernetes manifest
 
-A pre-built public image is available on GitHub Container Registry:
+Edit `kubernetes/custom-producer/deployment.yaml`:
 
-```
-ghcr.io/fahmy-kadiri-akl/ansible-cred-producer:latest
-```
-
-The default Kubernetes manifest already references this image - no build step needed.
-
-If you fork this repo and want your own image, the **Publish Custom Producer Image** GitHub Actions workflow automatically builds and pushes to GHCR on any push to `main` that changes `custom-producer/`. Or build manually:
-
-```bash
-cd custom-producer
-docker build -t <your-registry>/ansible-cred-producer:latest .
-docker push <your-registry>/ansible-cred-producer:latest
-```
-
-#### 2.2 Edit the Kubernetes manifest
-
-Edit `custom-producer/kubernetes/deployment.yaml`:
-
-- If you built your own image, update the `image` field to your registry path
 - Set the `akeyless-access-id` in the Secret to your Akeyless Gateway access ID
-- Set the ingress `host` to your hostname (e.g., `ansible-producer.example.com`)
-- Set the cert-manager issuer annotation to match your cluster
 
-#### 2.3 Create a DNS record
-
-Add a DNS A record for the producer hostname pointing to your ingress IP.
-
-#### 2.4 Deploy
+#### 2.2 Deploy
 
 ```bash
-kubectl apply -f custom-producer/kubernetes/deployment.yaml
-```
-
-#### 2.5 Verify
-
-```bash
-curl -sk https://ansible-producer.example.com/health
-# Should return: ok
-```
-
-### Option B: Docker Compose
-
-Use this if you don't have a Kubernetes cluster or want a quick standalone deployment.
-
-#### 2.1 Configure
-
-```bash
-cd custom-producer
-cp .env.example .env
-# Edit .env - set AKEYLESS_ACCESS_ID to your gateway's access ID
-```
-
-#### 2.2 Start
-
-```bash
-docker compose up -d
+kubectl apply -f kubernetes/custom-producer/deployment.yaml
 ```
 
 #### 2.3 Verify
+
+```bash
+kubectl run curl-test --rm -it --restart=Never --image=curlimages/curl -- \
+  curl -s http://rotator.rotator.svc.cluster.local:8080/health
+# Should return: ok
+```
+
+### Option B: Docker
+
+Use this if you don't have a Kubernetes cluster or want a quick standalone deployment.
+
+#### 2.1 Start
+
+```bash
+docker run -d --name rotator \
+  -p 8080:8080 \
+  -e SKIP_AUTH=true \
+  ghcr.io/fahmy-kadiri-akl/custom-producer/rotator:latest
+```
+
+> Set `SKIP_AUTH=true` only for initial testing. For production, set `AKEYLESS_ACCESS_ID` to your gateway's access ID and remove `SKIP_AUTH`.
+
+#### 2.2 Verify
 
 ```bash
 curl http://localhost:8080/health
 # Should return: ok
 ```
 
-#### 2.4 Note on networking
+#### 2.3 Note on networking
 
-When using Docker Compose, the Akeyless Gateway must be able to reach the producer over the network. If your gateway runs in K8s but the producer runs on a standalone host, make sure port 8080 is accessible and set the Akeyless Web Target URL to `http://<host-ip>:8080/sync/rotate`.
+When using Docker, the Akeyless Gateway must be able to reach the producer over the network. If your gateway runs in K8s but the producer runs on a standalone host, make sure port 8080 is accessible and set the Akeyless Web Target URL to `http://<host-ip>:8080`.
 
-If both the gateway and producer run on the same Docker host, use `http://ansible-cred-producer:8080/sync/rotate` in the web target and connect them to the same Docker network.
+If both the gateway and producer run on the same Docker host, connect them to the same Docker network.
 
 ---
 
@@ -780,7 +799,8 @@ This step creates the web target, rotated secrets, and webhook forwarder in Akey
 ### 3.1 Authenticate the CLI
 
 ```bash
-akeyless auth --access-id <your-access-id> --access-key <your-access-key> --access-type api_key
+akeyless auth --access-id <your-access-id> --access-type cert \
+  --cert-file-name /path/to/cert.pem --key-file-name /path/to/key.pem
 ```
 
 ### 3.2 Edit the setup script
@@ -837,17 +857,18 @@ The pipeline script simulates what a real CI/CD system (GitHub Actions, GitLab C
 
 ### 4.1 Set environment variables
 
-The pipeline script uses API key authentication by default. You need both the access ID and access key from your Akeyless API key auth method.
+The pipeline script uses certificate authentication. You need the access ID from your Akeyless certificate auth method, and the client certificate and private key as base64-encoded strings.
 
-> **Where to find your access key:** The access key is shown only once when you create the auth method in the Akeyless Console. If you've lost it, check `~/.akeyless/profiles/default.toml` - the CLI stores it there after `akeyless auth`. You can also create a new API key auth method in the Console.
+> **Setting up certificate auth:** Create a certificate auth method in the Akeyless Console under **Auth Methods > New > Certificate**. Upload or paste the CA certificate that signed your client certificates. Then generate a client certificate signed by that CA.
 
 ```bash
-export AKEYLESS_ACCESS_ID="p-your-access-id"       # API key auth method access ID
-export AKEYLESS_ACCESS_KEY="your-access-key"        # API key auth method access key (base64 string)
-export AWX_URL="https://ansible.example.com"        # Your AWX/AAP URL
+export AKEYLESS_ACCESS_ID="p-your-access-id"                     # Certificate auth method access ID
+export AKEYLESS_CERT_DATA=$(base64 -w0 /path/to/client-cert.pem) # Base64-encoded client certificate
+export AKEYLESS_KEY_DATA=$(base64 -w0 /path/to/client-key.pem)   # Base64-encoded client private key
+export AWX_URL="https://ansible.example.com"                     # Your AWX/AAP URL
 ```
 
-For cloud-based authentication (AWS IAM, Azure AD, GCP, OIDC), see [Using Cloud Identity Instead of API Keys](#44-using-cloud-identity-instead-of-api-keys) below.
+For cloud-based authentication (AWS IAM, Azure AD, GCP, OIDC), see [Using Cloud Identity Instead of Certificates](#44-using-cloud-identity-instead-of-certificates) below.
 
 ### 4.2 Run the pipeline
 
@@ -871,17 +892,18 @@ Output:
 The `.github/workflows/server-build.yml` workflow wraps this script. Add these repository secrets:
 
 - `AKEYLESS_ACCESS_ID`
-- `AKEYLESS_ACCESS_KEY`
+- `AKEYLESS_CERT_DATA` (base64-encoded client certificate)
+- `AKEYLESS_KEY_DATA` (base64-encoded client private key)
 
 Then trigger via **Actions > Server Build Pipeline > Run workflow**.
 
-### 4.4 Using Cloud Identity Instead of API Keys
+### 4.4 Using Cloud Identity Instead of Certificates
 
-The pipeline script authenticates to Akeyless using an API key (`access_key`), but in production you should use your cloud platform's native identity so there are no long-lived secrets to manage. The REST API `/auth` endpoint accepts the same `access-type` values as the CLI.
+The pipeline script authenticates to Akeyless using a client certificate, but you can also use your cloud platform's native identity. The REST API `/auth` endpoint accepts the same `access-type` values as the CLI.
 
-| Auth Method | `access-type` | What replaces `access-key` | Where the identity comes from |
+| Auth Method | `access-type` | What replaces cert data | Where the identity comes from |
 |-------------|---------------|---------------------------|-------------------------------|
-| **API Key** | `api_key` | `access-key` (static secret) | Manually created in Akeyless Console |
+| **Certificate** | `cert` | `cert-data` + `key-data` (base64 PEM) | Client certificate signed by a CA registered in the Akeyless certificate auth method |
 | **AWS IAM** | `aws_iam` | `cloud-id` (signed STS request) | EC2 instance profile, ECS task role, or Lambda execution role. Use `akeyless auth --access-type aws_iam --cloud-id $(curl -s http://169.254.169.254/latest/meta-data/iam/info)` or generate via AWS SDK. |
 | **Azure AD** | `azure_ad` | `cloud-id` (MSI token) | Managed Identity on the VM, VMSS, or AKS pod. Fetch from `http://169.254.169.254/metadata/identity/oauth2/token`. |
 | **GCP IAM** | `gcp` | `cloud-id` (signed JWT) | Service account attached to GCE instance, GKE workload, or Cloud Run service. Fetch from metadata server. |
@@ -889,12 +911,13 @@ The pipeline script authenticates to Akeyless using an API key (`access_key`), b
 | **JWT/OIDC** | `jwt` or `oidc` | `jwt` (token string) | GitHub Actions OIDC (`ACTIONS_ID_TOKEN_REQUEST_TOKEN`), GitLab CI `CI_JOB_JWT`, or any OIDC provider. |
 | **Universal Identity** | `universal_identity` | `uid-token` | Token issued by Akeyless for on-prem machines without cloud identity. |
 
-**Example - replacing API key auth with AWS IAM in the pipeline:**
+**Example - replacing certificate auth with AWS IAM in the pipeline:**
 
 ```bash
 # Instead of:
 #   export AKEYLESS_ACCESS_ID="p-your-access-id"
-#   export AKEYLESS_ACCESS_KEY="your-access-key"
+#   export AKEYLESS_CERT_DATA=$(base64 -w0 cert.pem)
+#   export AKEYLESS_KEY_DATA=$(base64 -w0 key.pem)
 
 # Generate the cloud-id (signed GetCallerIdentity request)
 CLOUD_ID=$(python3 -c "
@@ -958,7 +981,8 @@ ansible-rulebook \
   -i ansible/inventory/ \
   -e eda_webhook_token="<your-webhook-token>" \
   -e akeyless_access_id="<your-access-id>" \
-  -e akeyless_access_key="<your-access-key>" \
+  -e akeyless_cert_file="/path/to/cert.pem" \
+  -e akeyless_key_file="/path/to/key.pem" \
   -e controller_password="<awx-admin-password>"
 ```
 
@@ -1142,7 +1166,8 @@ Run the end-to-end test suite:
 
 ```bash
 export AKEYLESS_ACCESS_ID="p-your-access-id"
-export AKEYLESS_ACCESS_KEY="your-access-key"
+export AKEYLESS_CERT_DATA=$(base64 -w0 /path/to/cert.pem)
+export AKEYLESS_KEY_DATA=$(base64 -w0 /path/to/key.pem)
 ./cicd/e2e-test.sh
 ```
 
@@ -1165,7 +1190,7 @@ All 7 tests must pass for a healthy deployment.
 ### Adding a new credential to rotate
 
 1. Create the user in AWX.
-2. Build a payload JSON matching the `password` or `api_key` type (see `custom-producer/internal/producer/types.go` for the schema).
+2. Build a payload JSON matching the `password` or `api_key` type (see the [custom-producer payload reference](https://github.com/Fahmy-Kadiri-akl/custom-producer#payload-reference) for the schema).
 3. Create a new rotated secret in Akeyless with that payload:
 
 ```bash
@@ -1183,26 +1208,72 @@ akeyless rotated-secret create custom \
 
 ### Updating the custom producer
 
+The custom producer image is built from [Fahmy-Kadiri-akl/custom-producer](https://github.com/Fahmy-Kadiri-akl/custom-producer). To update to the latest version:
+
 ```bash
-cd custom-producer
-docker build -t <registry>/ansible-cred-producer:latest .
-docker push <registry>/ansible-cred-producer:latest
-kubectl rollout restart deployment/ansible-cred-producer -n ansible
+kubectl rollout restart deployment/rotator -n rotator
 ```
+
+The deployment uses `imagePullPolicy: Always` by default with the `:latest` tag, so a restart pulls the newest image.
 
 ---
 
 ## Troubleshooting
 
+### Deployment Issues
+
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Rotation returns 404 | Web target URL doesn't include `/sync/rotate` | Update web target: `akeyless target update web --name <target> --url <producer-url>/sync/rotate` |
-| Rotation returns 401 | Gateway access ID mismatch | Verify `AKEYLESS_ACCESS_ID` env var in the producer matches the gateway's access ID |
-| Pipeline fails at step 3 | Password is stale or rotation failed | Check rotation status: `akeyless describe-item --name <secret>` and producer logs: `kubectl logs -n ansible deployment/ansible-cred-producer` |
-| Webhook not received | Event forwarder misconfigured | Verify: `akeyless event-forwarder get --name ansible-eda-rotation-forwarder` |
-| AWX user lookup fails | `target_user_id` is 0 and username doesn't match | Set `target_user_id` explicitly in the payload, or verify the username exists in AWX |
-| `SKIP_AUTH=true` in production | Auth is disabled | Remove `SKIP_AUTH` env var: `kubectl set env deployment/ansible-cred-producer -n ansible SKIP_AUTH-` |
-| AWX operator pod `ImagePullBackOff` | `kube-rbac-proxy` image reference is stale | Fixed automatically by the kustomize image override. If deploying from a custom kustomization, add the image override for `gcr.io/kubebuilder/kube-rbac-proxy` → `registry.k8s.io/kubebuilder/kube-rbac-proxy:v0.16.0` |
+| AWX operator pod `ImagePullBackOff` | `kube-rbac-proxy` image reference is stale | Fixed automatically by the kustomize image override. If deploying from a custom kustomization, add the image override for `gcr.io/kubebuilder/kube-rbac-proxy` to `registry.k8s.io/kubebuilder/kube-rbac-proxy:v0.16.0` |
+| `awx-task` pod stuck in `Init:0/3` for several minutes | Normal - the task pod waits for the migration job to complete before starting | Wait up to 5 minutes. Check migration job: `kubectl get jobs -n ansible` |
+| AWX instance not created after `kubectl apply -k` | CRD not yet registered | Run `kubectl wait --for=condition=Established crd/awxs.awx.ansible.com --timeout=120s` then apply the instance: `kubectl apply -f kubernetes/awx/awx-instance.yaml` |
 | K3s ingress not routing traffic | AWX manifest uses `nginx` but K3s ships `traefik` | Change `ingress_class_name` to `traefik` in `awx-instance.yaml` |
 | AWX ingress shows `127.0.0.1` on GCE/GKE | Using `nginx` class instead of `gce` | Change `ingress_class_name` to `gce` (see cloud-specific table in Step 1.3) |
 | AWX unreachable or returns wrong app | Hostname conflict - another ingress uses the same host | AWX needs its own unique hostname. Check with: `kubectl get ingress --all-namespaces -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name,HOST:.spec.rules[*].host'` |
+| cert-manager warning about `rotationPolicy` | cert-manager >= v1.18.0 changed the default from `Never` to `Always` | Informational only - no action needed. Add `spec.privateKey.rotationPolicy: Always` to silence the warning |
+
+### Rotation Issues
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Rotation returns 404 | Web target URL incorrect | Update web target: `akeyless target update web --name <target> --url <producer-url>` |
+| Rotation returns 401 | Gateway access ID mismatch | Verify `AKEYLESS_ACCESS_ID` env var in the producer matches the gateway's access ID |
+| Producer returns `missing AkeylessCreds header` | Direct call without Gateway, or `SKIP_AUTH` not set for testing | For testing: `kubectl set env deployment/rotator -n rotator SKIP_AUTH=true`. In production, only the Akeyless Gateway should call the producer. |
+| AWX user lookup fails | `target_user_id` is 0 and username doesn't match | Set `target_user_id` explicitly in the payload, or verify the username exists in AWX |
+| Webhook not received | Event forwarder misconfigured | Verify: `akeyless event-forwarder get --name ansible-eda-rotation-forwarder` |
+
+### Pipeline Issues
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Pipeline fails at step 1 (auth) | Certificate auth misconfigured | Verify `AKEYLESS_CERT_DATA` and `AKEYLESS_KEY_DATA` are base64-encoded with no newlines: `base64 -w0 cert.pem` |
+| Pipeline fails at step 3 (AWX auth) | Password is stale or rotation failed | Check rotation status: `akeyless describe-item --name <secret>` and producer logs: `kubectl logs -n rotator deployment/rotator` |
+| `SKIP_AUTH=true` in production | Auth is disabled | Remove `SKIP_AUTH` env var: `kubectl set env deployment/rotator -n rotator SKIP_AUTH-` |
+
+### Clean Redeploy
+
+To completely tear down and redeploy AWX from scratch:
+
+```bash
+# 1. Delete the AWX instance first (lets operator clean up)
+kubectl delete awx awx -n ansible --timeout=60s
+
+# 2. Wait for pods to terminate
+kubectl wait --for=delete pod -l app.kubernetes.io/name=awx -n ansible --timeout=120s
+
+# 3. Delete the operator and all resources
+kubectl delete -k kubernetes/awx/
+
+# 4. Clean up any remaining resources
+kubectl delete pvc --all -n ansible
+kubectl delete namespace ansible
+
+# 5. Redeploy
+kubectl create namespace ansible
+kubectl apply -k kubernetes/awx/
+kubectl wait --for=condition=Established crd/awxs.awx.ansible.com --timeout=120s
+kubectl apply -f kubernetes/awx/awx-instance.yaml
+
+# 6. Wait for readiness (4-5 minutes)
+kubectl get pods -n ansible -w
+```

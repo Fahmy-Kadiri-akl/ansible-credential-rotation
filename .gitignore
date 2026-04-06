@@ -9,7 +9,7 @@
 credentials.json
 secrets.json
 **/secret*.yaml
-!custom-producer/kubernetes/deployment.yaml
+!kubernetes/custom-producer/deployment.yaml
 kubeconfig
 kubeconfig.yaml
 .kube/

@@ -14,7 +14,8 @@
 #
 # Usage:
 #   export AKEYLESS_ACCESS_ID=p-xxxx
-#   export AKEYLESS_ACCESS_KEY=xxxx
+#   export AKEYLESS_CERT_DATA=$(base64 -w0 /path/to/cert.pem)
+#   export AKEYLESS_KEY_DATA=$(base64 -w0 /path/to/key.pem)
 #   ./pipeline-server-build.sh [server_name] [server_role]
 #
 # ==============================================================================
@@ -39,13 +40,14 @@ echo "==============================================="
 echo ""
 
 # Step 1: Authenticate to Akeyless
-echo "[1/5] Authenticating to Akeyless..."
+echo "[1/5] Authenticating to Akeyless (certificate auth)..."
 TOKEN=$(curl -sf -X POST "${AKEYLESS_API}/auth" \
   -H "Content-Type: application/json" \
   -d "{
     \"access-id\": \"${AKEYLESS_ACCESS_ID}\",
-    \"access-key\": \"${AKEYLESS_ACCESS_KEY}\",
-    \"access-type\": \"api_key\"
+    \"access-type\": \"cert\",
+    \"cert-data\": \"${AKEYLESS_CERT_DATA}\",
+    \"key-data\": \"${AKEYLESS_KEY_DATA}\"
   }" | jq -r '.token')
 
 if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
